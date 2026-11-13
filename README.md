@@ -50,7 +50,7 @@ This project is built on top of the excellent [TradingAgents](https://github.com
 - Position Size Calculator
 - P&L Tracking + "Reflect & Remember" (feed outcomes to agent memory)
 - Memory Persistence (agents learn across sessions)
-- Customizable News Feed (RSS + yfinance)
+- Customizable News Feed (RSS + Dhan News API)
 - API key management via UI
 - Multi-provider LLM support with real-time cost tracking
 
@@ -75,7 +75,7 @@ DISCOVER
                         Auto-adjusts for FII/DII + events + concentration
   📡 Market Scan       — Gap / Volume / Breakout (FREE)
   🎯 Strategies        — S/R, Pivot, Cyclical patterns (FREE)
-  📰 News Feed         — RSS + yfinance, customizable (FREE)
+  📰 News Feed         — RSS + Dhan News, customizable (FREE)
 
 ANALYZE
   🔍 Deep Analysis     — AI-powered 10-agent pipeline (~Rs.15-60)
@@ -198,9 +198,34 @@ strictly read-only — no orders, no fund transfers.
    ID**, **API key**, and **API secret**, then click **Connect Dhan**. Log in on
    Dhan's consent page; you'll be redirected back and your holdings will load.
 
-Dhan access tokens are valid for 24 hours, so you re-connect once each trading
-day. Holdings valuation also uses Dhan's market-quote feed, which requires a
-DhanHQ Data APIs subscription on the account.
+Dhan access tokens are valid for 24 hours. The app automatically refreshes the token using your PIN + TOTP credentials — no manual browser login needed each day.
+
+### 6. Configure Market Data & Symbols
+
+**Market Data Source:** The app uses **DhanHQ API** for all market data (quotes, charts, fundamentals, news, sectors). This replaces Yahoo Finance with your paid Dhan subscription for accurate, real-time Indian market data.
+
+**Symbol Management:** All stock symbols are loaded from a single CSV file. Edit `config/symbols.csv` to add/remove stocks:
+
+```csv
+symbol
+RELIANCE
+TCS
+HDFCBANK
+TATAMOTORS
+# Add or remove symbols here — that's it!
+```
+
+**Architecture:**
+- `config/symbols.csv` — single source of truth for all symbols
+- `backend/stock_list.py` — loads CSV, provides symbol lists to all modules
+- `backend/brokers/dhan_market_data.py` — fetches security_id, sector, fundamentals from Dhan API
+- No hardcoded symbol lists anywhere — everything comes from the CSV
+
+**Auto-login:** The app automatically logs in to Dhan using your PIN + TOTP credentials from `.env`. No manual browser login needed.
+
+### 7. Connect your Dhan portfolio (optional, for holdings sync)
+
+The DhanHQ integration can also pull your **holdings** for portfolio analysis. It is strictly read-only — no orders, no fund transfers. This is separate from the market data integration above.
 
 ---
 
@@ -236,7 +261,7 @@ Reflect & Remember → 5 agent memories updated with actual P&L outcome
 | **Strategies** | No | FREE | S/R levels, Pivot Points, Cyclical patterns |
 | **Performance Tracker** | No | FREE | Measures historical win rate of each strategy |
 | **Seasonal Backtest** | No | FREE | Tests "buy in month X, sell in month Y" strategies |
-| **News Feed** | No | FREE | Aggregates Indian market news from RSS + yfinance |
+| **News Feed** | No | FREE | Aggregates Indian market news from RSS + Dhan News API |
 | **Charts** | No | FREE | Candlestick charts with volume |
 | **Deep Analysis** | Yes | ~Rs.15-60 (~$0.18-0.72 USD) | Full AI pipeline with customizable analysts/depth/language |
 | **AI Backtest** | Yes | ~Rs.15 per date (~$0.18/date) | Runs deep analysis on historical dates |
@@ -294,7 +319,7 @@ Live data via NSE (cached 1 hour). Falls back to manual entry if scraping fails.
 | US Fed FOMC (today) | -1.0 |
 | F&O monthly expiry (today) | -0.5 |
 
-Hardcoded RBI/Budget/Fed dates (published yearly). Per-stock earnings dates pulled from yfinance.
+Hardcoded RBI/Budget/Fed dates (published yearly). Per-stock earnings dates pulled from Dhan API.
 
 **3. Sector Concentration Checker** — Prevents over-exposure to one sector:
 

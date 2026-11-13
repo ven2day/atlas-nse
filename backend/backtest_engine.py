@@ -1,7 +1,7 @@
 """Core backtesting engine — runs the AI pipeline on historical dates and tracks P&L."""
 
 import time
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 from datetime import datetime, timedelta
 from typing import Optional
 from tradingagents.utils.ticker import normalize_ticker
@@ -42,7 +42,7 @@ def get_price_on_date(ticker: str, date_str: str) -> Optional[float]:
     start = (dt - timedelta(days=3)).strftime("%Y-%m-%d")
     end = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    t = yf.Ticker(symbol)
+    t = Ticker(symbol)
     hist = t.history(start=start, end=end)
 
     if hist.empty:

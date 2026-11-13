@@ -20,7 +20,7 @@ The recommendation engine uses this to:
 - Flag risky entries before major data releases
 """
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 from datetime import datetime, date, timedelta
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -158,7 +158,7 @@ def fetch_earnings_for_ticker(ticker: str) -> Optional[dict]:
     """Fetch next earnings date for a ticker via yfinance."""
     try:
         symbol = normalize_ticker(ticker)
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         cal = t.calendar
         if not cal or not isinstance(cal, dict):
             return None

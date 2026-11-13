@@ -3,7 +3,7 @@
 All simulations are FREE (pure price math from yfinance, no AI API calls).
 """
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 import uuid
 from datetime import datetime, timedelta, date
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -47,7 +47,7 @@ def open_paper_trade(
     """Open a new paper trade at current market price."""
     symbol = normalize_ticker(ticker)
     try:
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         hist = t.history(period="2d")
         if hist.empty:
             return {"ok": False, "error": f"No price data for {symbol}"}
@@ -96,7 +96,7 @@ def close_paper_trade(trade_id: int) -> dict:
 
     symbol = normalize_ticker(trade["ticker"])
     try:
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         hist = t.history(period="2d")
         if hist.empty:
             return {"ok": False, "error": f"No price data for {symbol}"}
@@ -148,7 +148,7 @@ def _price_n_days_later(symbol: str, entry_date_str: str, n_trading_days: int) -
         # Fetch a window around the target date
         start = (target - timedelta(days=3)).strftime("%Y-%m-%d")
         end = (target + timedelta(days=1)).strftime("%Y-%m-%d")
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         hist = t.history(start=start, end=end)
         if hist.empty:
             return None
@@ -262,7 +262,7 @@ def _analyze_stock_at_date(ticker: str, target_date: date) -> dict | None:
     import numpy as np
     try:
         symbol = f"{ticker}.NS"
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         # Fetch data: 6 months BEFORE target + 15 days AFTER for outcome measurement
         start = (target_date - timedelta(days=200)).strftime("%Y-%m-%d")
         end = (target_date + timedelta(days=20)).strftime("%Y-%m-%d")

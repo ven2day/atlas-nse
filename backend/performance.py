@@ -8,7 +8,7 @@ For each strategy (gap, volume, breakout, S/R bounce), retroactively check:
 All analysis is FREE — no AI API calls, pure price math from yfinance.
 """
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 import numpy as np
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,7 +26,7 @@ def _fetch_history(ticker: str, days: int = 90):
     """Fetch OHLCV history for a stock."""
     try:
         symbol = f"{ticker}.NS"
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         hist = t.history(period=f"{days}d")
         if hist.empty or len(hist) < 30:
             return None

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 interface Props {
   value: string;
   onChange: (ticker: string) => void;
+  onSelect?: (ticker: string) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -18,7 +19,7 @@ interface StockResult {
   symbol: string;
 }
 
-export function TickerSearch({ value, onChange, placeholder, disabled, className }: Props) {
+export function TickerSearch({ value, onChange, onSelect, placeholder, disabled, className }: Props) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<StockResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -69,6 +70,7 @@ export function TickerSearch({ value, onChange, placeholder, disabled, className
   const handleSelect = (ticker: string) => {
     setQuery(ticker);
     onChange(ticker);
+    onSelect?.(ticker);
     setShowDropdown(false);
   };
 

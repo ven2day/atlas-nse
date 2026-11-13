@@ -6,13 +6,18 @@ JWT obtained through Dhan's three-step app consent flow; because Dhan does not
 echo an OAuth state parameter back to the redirect, the callback instead binds
 the login to this installation by verifying that the exchanged session belongs
 to the configured client ID.
+
+Headless login is supported using DHAN_PIN and DHAN_TOTP_SECRET from .env.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 import os
+import struct
+import time
 from datetime import date
 from typing import Any
 from urllib.parse import quote
@@ -31,6 +36,39 @@ DHAN_API_SECRET = "dhan_api_secret"
 DHAN_ACCESS_TOKEN = "dhan_access_token"
 DHAN_ACCESS_TOKEN_DATE = "dhan_access_token_date"
 DHAN_PROFILE = "dhan_profile"
+
+
+def _generate_totp(secret: str) -> str:
+    """Generate a 6-digit TOTP code from a Base32-encoded secret."""
+    # Decode the Base32 secret
+    secret = secret.upper().strip()
+    # Add padding if needed
+    padding = 8 - (len(secret) % 8)
+    if padding != 8:
+        secret += "=" * padding
+    
+    try:
+        key = base64.b32decode(secret)
+    except Exception:
+        raise DhanConfigError("Invalid TOTP secret format")
+    
+    # Get current time step (30-second intervals)
+    time_step = int(time.time()) // 30
+    
+    # Convert time step to bytes
+    time_bytes = struct.pack(">Q", time_step)
+    
+    # HMAC-SHA1
+    import hmac
+    import hashlib
+    hmac_hash = hmac.new(key, time_bytes, hashlib.sha1).digest()
+    
+    # Dynamic truncation
+    offset = hmac_hash[-1] & 0x0F
+    code = struct.unpack(">I", hmac_hash[offset:offset + 4])[0]
+    code = (code & 0x7FFFFFFF) % 1000000
+    
+    return str(code).zfill(6)
 
 # Dhan's v2 holdings rows carry segment enums (NSE_EQ/BSE_EQ, "ALL" in the
 # docs example); the position store is exchange-level (NSE/BSE) like every
@@ -265,9 +303,77 @@ def get_authenticated_client() -> _DhanClient:
     if not client_id:
         raise DhanConfigError("Dhan client ID is not configured")
     if not access_token or token_date != _today():
-        clear_dhan_access_token()
-        raise DhanConfigError("Dhan login is required for today")
+        # Try automatic headless login using DhanHQ SDK
+        try:
+            headless_login()
+            access_token = _access_token()
+            token_date = _access_token_date()
+        except Exception as e:
+            print(f"[Dhan] Headless login failed: {e}", flush=True)
+            clear_dhan_access_token()
+            raise DhanConfigError("Dhan login is required for today")
     return _DhanClient(client_id, access_token)
+
+
+def headless_login() -> dict:
+    """Perform automatic headless login using DhanHQ SDK with PIN + TOTP."""
+    client_id = _client_id()
+    api_key = _api_key()
+    api_secret = _api_secret()
+    pin = (os.getenv("DHAN_PIN") or "").strip()
+    totp_secret = (os.getenv("DHAN_TOTP_SECRET") or "").strip()
+    
+    if not (client_id and api_key and api_secret):
+        raise DhanConfigError("Dhan credentials not configured")
+    if not pin:
+        raise DhanConfigError("DHAN_PIN not configured for headless login")
+    if not totp_secret:
+        raise DhanConfigError("DHAN_TOTP_SECRET not configured for headless login")
+    
+    # Generate TOTP code
+    totp_code = _generate_totp(totp_secret)
+    
+    # Use DhanHQ SDK for headless login
+    try:
+        from dhanhq import DhanLogin
+        
+        login_client = DhanLogin(client_id)
+        
+        # Step 1: Generate consent session (skip browser open)
+        login_client.generate_login_session(api_key, api_secret)
+        
+        # Step 2: Generate access token using PIN + TOTP
+        result = login_client.generate_token(pin, totp_code)
+        
+        if not isinstance(result, dict):
+            raise DhanConfigError("Dhan login returned invalid response")
+        
+        access_token = result.get("accessToken") or result.get("access_token")
+        if not access_token:
+            # Try nested data structure
+            data = result.get("data", {})
+            if isinstance(data, dict):
+                access_token = data.get("accessToken") or data.get("access_token")
+        
+        if not access_token:
+            raise DhanConfigError(f"Dhan login did not return access token. Response: {result}")
+        
+        # Store the access token
+        set_setting(DHAN_ACCESS_TOKEN, str(access_token))
+        set_setting(DHAN_ACCESS_TOKEN_DATE, _today())
+        
+        # Store profile info
+        profile = login_client.user_profile if hasattr(login_client, "user_profile") else {}
+        if isinstance(profile, dict):
+            set_setting(DHAN_PROFILE, json.dumps(profile))
+        
+        print(f"[Dhan] Headless login successful for client {client_id}", flush=True)
+        return get_dhan_status()
+        
+    except ImportError:
+        raise DhanConfigError("dhanhq SDK not installed. Run: pip install dhanhq")
+    except Exception as e:
+        raise DhanConfigError(f"Headless login failed: {e}")
 
 
 def fetch_equity_holdings() -> list[dict[str, Any]]:

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Newspaper, Rss, ExternalLink, RefreshCw, Settings2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Newspaper, Rss, ExternalLink, RefreshCw, Settings2, Plus, Trash2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface Article {
@@ -126,7 +126,7 @@ export default function NewsPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Newspaper className="h-6 w-6" /> News Feed
           </h1>
-          <p className="text-sm text-muted-foreground">Aggregated Indian market news from RSS feeds + yfinance</p>
+          <p className="text-sm text-muted-foreground">Aggregated Indian market news from RSS feeds + Dhan News API</p>
         </div>
         <Button variant="outline" size="sm" onClick={loadNews} disabled={loading}>
           {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
@@ -234,12 +234,38 @@ export default function NewsPage() {
                 </CardContent>
               </Card>
 
-              {/* yfinance queries */}
+              {/* Dhan News */}
+              {sources.dhan && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      Dhan News Headlines
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      News from your Dhan API subscription. {sources.dhan.available ? "✓ Connected" : "Login to Dhan to enable"}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Enable Dhan News</span>
+                      <input
+                        type="checkbox"
+                        checked={sources.dhan.enabled}
+                        onChange={(e) => setSources({ ...sources, dhan: { ...sources.dhan, enabled: e.target.checked } })}
+                        className="h-4 w-4"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Market search queries */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">yfinance Search Queries</CardTitle>
+                  <CardTitle className="text-base">Market Search Queries</CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Queries used to find market news via yfinance. Add Indian-market specific searches here.
+                    Queries used to find market news. Add Indian-market specific searches here.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-2">

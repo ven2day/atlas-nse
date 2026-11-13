@@ -1,7 +1,7 @@
 """Strategy endpoints — Support/Resistance, Pivot Points, and strategy-based signals."""
 
 from fastapi import APIRouter, Query
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 import numpy as np
 from datetime import datetime, timedelta
 from tradingagents.utils.ticker import normalize_ticker
@@ -105,7 +105,7 @@ def get_support_resistance(
 ):
     """Calculate support and resistance levels for a ticker."""
     symbol = normalize_ticker(ticker)
-    t = yf.Ticker(symbol)
+    t = Ticker(symbol)
     hist = t.history(period=period)
 
     if hist.empty or len(hist) < 10:
@@ -148,7 +148,7 @@ def get_support_resistance(
 def get_pivot_points(ticker: str):
     """Calculate daily pivot points (based on previous session)."""
     symbol = normalize_ticker(ticker)
-    t = yf.Ticker(symbol)
+    t = Ticker(symbol)
     hist = t.history(period="5d")
 
     if hist.empty or len(hist) < 2:

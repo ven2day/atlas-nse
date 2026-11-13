@@ -6,6 +6,7 @@ import { ThemedToaster } from "@/components/theme/ThemedToaster";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { AppShell } from "@/components/theme/AppShell";
 import { AuthNotice } from "@/components/auth/AuthNotice";
+import { ModeProvider } from "@/components/mode/ModeContext";
 
 const openSans = Open_Sans({
   variable: "--font-open-sans",
@@ -34,9 +35,11 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex">
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
-          <ThemedToaster />
-          <AuthNotice />
+          <ModeProvider>
+            <AppShell>{children}</AppShell>
+            <ThemedToaster />
+            <AuthNotice />
+          </ModeProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "",
   },
+  allowedDevOrigins: ["192.168.0.240"],
 };
 
 export default nextConfig;

@@ -8,11 +8,17 @@ function getApiBase(): string {
 
   // Keep the existing local two-process workflow usable without exposing any
   // credential or host-specific deployment setting in the browser bundle.
-  if (typeof window !== "undefined" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname)) {
-    const hostname = window.location.hostname.includes(":")
-      ? `[${window.location.hostname.replace(/^\[|\]$/g, "")}]`
-      : window.location.hostname;
-    return `${window.location.protocol}//${hostname}:8000`;
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    // For localhost, use localhost; for LAN IPs, use the same IP
+    const apiHostname = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname)
+      ? (hostname.includes(":") ? `[${hostname.replace(/^\[|\]$/g, "")}]` : hostname)
+      : hostname;
+    // Only return a backend URL if we're on a development port (3000, 3001)
+    const port = window.location.port;
+    if (["3000", "3001"].includes(port)) {
+      return `${window.location.protocol}//${apiHostname}:8000`;
+    }
   }
   return "";
 }

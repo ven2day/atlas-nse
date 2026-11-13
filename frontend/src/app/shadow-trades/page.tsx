@@ -200,7 +200,7 @@ export default function ShadowTradesPage() {
                 <li><span className="text-foreground font-medium">Wait ~30 days:</span> Need ≥5 tracked + ≥5 skipped picks before the verdict pill is meaningful.</li>
                 <li><span className="text-foreground font-medium">Read the comparison:</span> The "Skipped vs Tracked" delta tells you if your gut is filtering out winners. Skipped &gt; Tracked = your filter hurts.</li>
                 <li><span className="text-foreground font-medium">Scan for missed winners:</span> Look at rows with <code>user_tracked=0</code> and big positive 5d P&L. These are picks you wrongly skipped — what made you skip?</li>
-                <li><span className="text-foreground font-medium">Click 'Backfill prices':</span> Forces yfinance lookup for ripe horizons. Normally happens automatically with paper trade refreshes.</li>
+                <li><span className="text-foreground font-medium">Click 'Backfill prices':</span> Forces market data lookup for ripe horizons. Normally happens automatically with paper trade refreshes.</li>
                 <li><span className="text-foreground font-medium">Long-term:</span> Once you have 50+ shadow trades, the recommender's true win rate becomes solid — use it to calibrate position sizing rather than relying on stated success_probability alone.</li>
               </ol>
             </div>

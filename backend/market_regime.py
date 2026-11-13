@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 import numpy as np
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 
 
 NIFTY_SYMBOL = "^NSEI"
@@ -67,7 +67,7 @@ def classify_regime_for_date(target_date: Optional[date] = None) -> dict:
     end = target + timedelta(days=2)
 
     try:
-        hist = yf.Ticker(NIFTY_SYMBOL).history(
+        hist = Ticker(NIFTY_SYMBOL).history(
             start=start.isoformat(), end=end.isoformat()
         )
     except Exception as e:

@@ -20,6 +20,8 @@ import {
   Newspaper,
   Brain,
   PieChart,
+  LineChart,
+  Zap,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -38,13 +40,17 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
+    title: "EXPLORE",
     items: [
-      { href: "/", label: "Today", icon: Home, hint: "Your daily workflow" },
+      { href: "/", label: "Home", icon: Home, hint: "Pick swing or intraday" },
+      { href: "/swing", label: "Swing", icon: LineChart, hint: "Research & fundamentals" },
+      { href: "/intraday", label: "Intraday", icon: Zap, hint: "Live chart & paper trading" },
     ],
   },
   {
     title: "DISCOVER",
     items: [
+      { href: "/dashboard", label: "Today", icon: Sparkles, hint: "Your daily workflow" },
       { href: "/recommendations", label: "Top Picks", icon: Sparkles, hint: "AI-free recommendations" },
       { href: "/scanner", label: "Market Scan", icon: Radar, hint: "Gap / Volume / Breakout" },
       { href: "/strategies", label: "Strategies", icon: Target, hint: "S/R, Cyclical patterns" },
@@ -159,7 +165,7 @@ export function Sidebar() {
         </button>
         <div className="text-[10px] text-muted-foreground">
           <p>Powered by Claude + LangGraph</p>
-          <p className="mt-0.5">Data: yfinance (NSE)</p>
+          <p className="mt-0.5">Data: DhanHQ API (NSE)</p>
         </div>
       </div>
     </aside>

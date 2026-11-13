@@ -25,7 +25,7 @@ const performanceHelp = [
   },
   {
     question: "Why does this take time?",
-    answer: "It has to fetch 60+ days of history for 50-100 stocks, then analyze every day to find signals. For NIFTY 50 (60 days), expect ~30-60 seconds. For BSE 250, expect 2-3 minutes.\n\nAll computation is FREE \u2014 just math on yfinance data, no AI API calls.",
+    answer: "It has to fetch 60+ days of history for 50-100 stocks, then analyze every day to find signals. For NIFTY 50 (60 days), expect ~30-60 seconds. For BSE 250, expect 2-3 minutes.\n\nAll computation is FREE \u2014 just math on market data, no AI API calls.",
   },
   {
     question: "What's the best hold period?",

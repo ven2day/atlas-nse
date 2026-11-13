@@ -21,7 +21,7 @@ import json
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
 
 from backend.db import get_db
 
@@ -97,7 +97,7 @@ def _get_nifty_close_for_date(d: str) -> Optional[float]:
         # Pull a small window around the date to handle weekends/holidays
         start = target - timedelta(days=5)
         end = target + timedelta(days=2)
-        hist = yf.Ticker(NIFTY_SYMBOL).history(start=start.isoformat(), end=end.isoformat())
+        hist = Ticker(NIFTY_SYMBOL).history(start=start.isoformat(), end=end.isoformat())
         if hist.empty:
             return None
         # Match exact date; fall back to most recent prior trading day

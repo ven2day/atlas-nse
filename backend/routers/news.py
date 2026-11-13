@@ -16,13 +16,17 @@ router = APIRouter(prefix="/api/news", tags=["news"])
 class NewsSourcesUpdate(BaseModel):
     rss_feeds: dict | None = None
     yf_queries: list[str] | None = None
+    dhan_enabled: bool | None = None
 
 
 @router.get("/")
-def get_news(max_per_source: int = Query(10)):
+def get_news(
+    max_per_source: int = Query(10),
+    source: str | None = Query(None, description="Filter by source: dhan, rss, yfinance"),
+):
     """Get aggregated news from all enabled sources."""
     return {
-        "articles": fetch_all_news(max_per_source),
+        "articles": fetch_all_news(max_per_source, source_filter=source),
     }
 
 
@@ -45,7 +49,11 @@ def get_sources():
 def update_sources(data: NewsSourcesUpdate):
     """Update news sources configuration."""
     try:
-        save_news_sources_config(rss_feeds=data.rss_feeds, yf_queries=data.yf_queries)
+        save_news_sources_config(
+            rss_feeds=data.rss_feeds,
+            yf_queries=data.yf_queries,
+            dhan_enabled=data.dhan_enabled,
+        )
     except UnsafeFeedURL as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "saved", "config": get_news_sources_config()}

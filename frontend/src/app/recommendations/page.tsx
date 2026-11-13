@@ -41,7 +41,7 @@ const recommendationsHelp = [
   },
   {
     question: "How often should I run this?",
-    answer: "Best practice:\n  \u2022 Once per day, 30 min after market open (9:45 AM) \u2014 captures gaps and opening moves\n  \u2022 Once more at 2 PM \u2014 for intraday or next-day swing trade ideas\n\nThe data is real-time from yfinance, so signals change as prices move. A stock that was \"Buy\" at 10 AM might be \"Neutral\" by 2 PM if the price ran up too much.\n\nIt's completely FREE to run \u2014 no API cost. So run it as often as you like.",
+    answer: "Best practice:\n  \u2022 Once per day, 30 min after market open (9:45 AM) \u2014 captures gaps and opening moves\n  \u2022 Once more at 2 PM \u2014 for intraday or next-day swing trade ideas\n\nThe data is real-time from Dhan API, so signals change as prices move. A stock that was \"Buy\" at 10 AM might be \"Neutral\" by 2 PM if the price ran up too much.\n\nIt's completely FREE to run \u2014 no API cost. So run it as often as you like.",
   },
 ];
 

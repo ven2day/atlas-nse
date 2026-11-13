@@ -53,17 +53,35 @@ if [[ ! -d "frontend/node_modules" ]]; then
 fi
 
 # --- Free ports if something's already running ---
+# Uses multiple methods to find PIDs — lsof can miss processes in some envs.
+_pids_on_port() {
+  local port="$1"
+  local pids=""
+  # Try lsof first
+  pids="$(lsof -ti ":${port}" 2>/dev/null || true)"
+  # Fallback: ss + awk (more reliable in some containers/envs)
+  if [[ -z "$pids" ]]; then
+    pids="$(ss -tlnp "sport = :${port}" 2>/dev/null \
+      | grep -oP 'pid=\K[0-9]+' || true)"
+  fi
+  # Fallback: fuser
+  if [[ -z "$pids" ]] && command -v fuser &>/dev/null; then
+    pids="$(fuser "${port}/tcp" 2>/dev/null || true)"
+  fi
+  echo "$pids"
+}
+
 free_port() {
   local port="$1"
   local pids
-  pids="$(lsof -ti ":${port}" 2>/dev/null || true)"
+  pids="$(_pids_on_port "$port")"
   if [[ -n "$pids" ]]; then
     warn "Port ${port} is in use. Killing existing process(es): ${pids}"
     # shellcheck disable=SC2086
     kill ${pids} 2>/dev/null || true
     sleep 2
     # Force-kill anything still hanging on
-    pids="$(lsof -ti ":${port}" 2>/dev/null || true)"
+    pids="$(_pids_on_port "$port")"
     if [[ -n "$pids" ]]; then
       # shellcheck disable=SC2086
       kill -9 ${pids} 2>/dev/null || true
@@ -103,7 +121,7 @@ log "Starting backend on :${BACKEND_PORT}..."
   cd "$ROOT_DIR"
   # shellcheck disable=SC1091
   source venv/bin/activate
-  exec uvicorn backend.app:app --reload --port "$BACKEND_PORT"
+  exec uvicorn backend.app:app --reload --host 0.0.0.0 --port "$BACKEND_PORT"
 ) >>"$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
 

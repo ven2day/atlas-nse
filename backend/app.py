@@ -2,6 +2,8 @@
 
 import sys
 import os
+import math
+import numpy as np
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,6 +22,30 @@ from backend.settings_manager import load_api_keys_into_env, apply_llm_config_to
 from tradingagents.utils.ticker import InvalidTickerError
 
 
+def _sanitize_nonfinite(value):
+    """Recursively convert non-finite floats (NaN/±Inf) to JSON ``null``.
+
+    Price/indicator math can yield ``np.float64(nan)`` for symbols with missing
+    or delisted data, and ``json.dumps`` rejects non-finite floats by default.
+    Returning ``null`` is the JSON-compliant (and frontend-safe) representation.
+    """
+    if isinstance(value, dict):
+        return {k: _sanitize_nonfinite(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_nonfinite(v) for v in value]
+    if isinstance(value, (float, np.floating)):
+        f = float(value)
+        return None if math.isnan(f) or math.isinf(f) else f
+    return value
+
+
+class SafeJSONResponse(JSONResponse):
+    """``JSONResponse`` that renders NaN/Infinity as ``null`` instead of raising."""
+
+    def render(self, content):
+        return super().render(_sanitize_nonfinite(content))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_db()
@@ -35,6 +61,7 @@ app = FastAPI(
     description="AI-powered short-term trading decisions for NSE/BSE",
     version="0.1.0",
     lifespan=lifespan,
+    default_response_class=SafeJSONResponse,
 )
 
 app.add_middleware(

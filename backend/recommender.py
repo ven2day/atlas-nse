@@ -7,11 +7,11 @@ For each stock in the universe:
 4. Return top-ranked opportunities with clear BUY/SELL/HOLD recommendations
 """
 
-import yfinance as yf
 import numpy as np
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.scanner import NIFTY_50, NIFTY_100, BSE_250, UNIVERSES
+from backend.brokers.market_data_provider import Ticker
 
 
 # Historical win rates (baseline — will be overridden by live performance data if available)
@@ -94,8 +94,10 @@ def _analyze_stock(ticker: str) -> dict | None:
     """Analyze a single stock and return signals + score."""
     try:
         symbol = f"{ticker}.NS"
-        t = yf.Ticker(symbol)
-        hist = t.history(period="6mo")
+        
+        # Unified provider: Dhan when available, else Yahoo Finance fallback.
+        hist = Ticker(symbol).history(period="6mo")
+        
         if hist.empty or len(hist) < 50:
             return None
 

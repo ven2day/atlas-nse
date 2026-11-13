@@ -1,13 +1,32 @@
-"""Market data endpoints — stock quotes, charts, indicators, fundamentals, news."""
+"""Market data endpoints — stock quotes, charts, indicators, fundamentals, news.
+
+Uses DhanHQ v2 API for market data when the user has a paid Dhan subscription.
+Falls back to Yahoo Finance if Dhan is not configured or unavailable.
+"""
 
 from functools import lru_cache
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 import yfinance as yf
 from datetime import datetime, timedelta
 from tradingagents.utils.ticker import normalize_ticker
 
+from backend.brokers.dhan_market_data import (
+    DhanMarketDataError,
+    is_dhan_available,
+    get_chart_data as dhan_get_chart_data,
+    get_fundamentals as dhan_get_fundamentals,
+    get_news as dhan_get_news,
+    get_quote as dhan_get_quote,
+    search_stocks as dhan_search_stocks,
+)
+
 router = APIRouter(prefix="/api/market-data", tags=["market-data"])
+
+
+def _use_dhan() -> bool:
+    """Check if Dhan market data should be used (paid API available)."""
+    return is_dhan_available()
 
 
 @lru_cache(maxsize=256)
@@ -34,13 +53,24 @@ def _yahoo_nse_search(query: str) -> list:
 
 @router.get("/search")
 def search_stocks(q: str = Query("", description="Search query — ticker or company name")):
-    """Typeahead search via Yahoo Finance — no local stock list, always current.
+    """Typeahead search — uses Dhan if available, else Yahoo Finance.
 
-    Falls back to a small curated list only if the Yahoo lookup fails/offline.
+    Falls back to a small curated list only if both lookups fail/offline.
     """
     query = q.strip()
     if not query:
         return []
+
+    # Try Dhan first if available
+    if _use_dhan():
+        try:
+            results = dhan_search_stocks(query)
+            if results:
+                return results
+        except DhanMarketDataError:
+            pass
+
+    # Fall back to Yahoo Finance
     try:
         results = _yahoo_nse_search(query)
         if results:
@@ -53,8 +83,42 @@ def search_stocks(q: str = Query("", description="Search query — ticker or com
 
 @router.get("/quote/{ticker}")
 def get_quote(ticker: str):
-    """Get real-time quote for a ticker."""
+    """Get real-time quote for a ticker. Uses Dhan if available, else Yahoo Finance."""
     symbol = normalize_ticker(ticker)
+
+    # Try Dhan first if available
+    if _use_dhan():
+        try:
+            dhan_quote = dhan_get_quote(symbol)
+            # Get additional info from Yahoo for fields Dhan doesn't provide
+            t = yf.Ticker(symbol)
+            info = t.info
+            hist = t.history(period="2d")
+            prev_close = info.get("previousClose") or (hist.iloc[-2]["Close"] if len(hist) > 1 else dhan_quote.get("close", 0))
+            price = dhan_quote.get("price") or dhan_quote.get("close", 0)
+            change = price - prev_close
+            change_pct = (change / prev_close * 100) if prev_close else 0
+
+            return {
+                "ticker": symbol,
+                "name": info.get("shortName", symbol),
+                "price": round(price, 2),
+                "change": round(change, 2),
+                "change_percent": round(change_pct, 2),
+                "volume": int(hist.iloc[-1].get("Volume", 0)) if not hist.empty else 0,
+                "high": round(dhan_quote.get("high", 0), 2),
+                "low": round(dhan_quote.get("low", 0), 2),
+                "open": round(dhan_quote.get("open", 0), 2),
+                "prev_close": round(prev_close, 2),
+                "market_cap": info.get("marketCap"),
+                "pe_ratio": info.get("trailingPE"),
+                "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
+                "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
+            }
+        except DhanMarketDataError:
+            pass  # Fall through to Yahoo Finance
+
+    # Fall back to Yahoo Finance
     t = yf.Ticker(symbol)
     info = t.info
 
@@ -92,8 +156,17 @@ def get_chart_data(
     period: str = Query("3mo", description="1d, 5d, 1mo, 3mo, 6mo, 1y, 2y"),
     interval: str = Query("1d", description="1m, 5m, 15m, 1h, 1d, 1wk"),
 ):
-    """Get OHLCV chart data for a ticker."""
+    """Get OHLCV chart data for a ticker. Uses Dhan if available, else Yahoo Finance."""
     symbol = normalize_ticker(ticker)
+
+    # Try Dhan first if available
+    if _use_dhan():
+        try:
+            return dhan_get_chart_data(symbol, period=period, interval=interval)
+        except DhanMarketDataError:
+            pass  # Fall through to Yahoo Finance
+
+    # Fall back to Yahoo Finance
     t = yf.Ticker(symbol)
     hist = t.history(period=period, interval=interval)
 
@@ -141,8 +214,17 @@ def get_indicators(
 
 @router.get("/fundamentals/{ticker}")
 def get_fundamentals(ticker: str):
-    """Get company fundamentals."""
+    """Get company fundamentals. Uses Dhan if available, else Yahoo Finance."""
     symbol = normalize_ticker(ticker)
+
+    # Try Dhan first if available
+    if _use_dhan():
+        try:
+            return dhan_get_fundamentals(symbol)
+        except DhanMarketDataError:
+            pass  # Fall through to Yahoo Finance
+
+    # Fall back to Yahoo Finance
     t = yf.Ticker(symbol)
     info = t.info
 
@@ -170,8 +252,19 @@ def get_fundamentals(ticker: str):
 
 @router.get("/news/{ticker}")
 def get_news(ticker: str, count: int = Query(10)):
-    """Get latest news for a ticker."""
+    """Get latest news for a ticker. Uses Dhan if available, else Yahoo Finance."""
     symbol = normalize_ticker(ticker)
+
+    # Try Dhan first if available
+    if _use_dhan():
+        try:
+            articles = dhan_get_news(symbol, count=count)
+            if articles:
+                return {"ticker": symbol, "news": articles, "source": "dhan"}
+        except DhanMarketDataError:
+            pass  # Fall through to Yahoo Finance
+
+    # Fall back to Yahoo Finance
     t = yf.Ticker(symbol)
     news = t.get_news(count=count)
 
@@ -195,14 +288,23 @@ def get_news(ticker: str, count: int = Query(10)):
                 "published_at": "",
             })
 
-    return {"ticker": symbol, "news": articles}
+    return {"ticker": symbol, "news": articles, "source": "yahoo"}
 
 
 @router.get("/market-status")
 def get_market_status():
-    """Get current Indian market status (NIFTY, BANKNIFTY, session)."""
+    """Get current Indian market status (NIFTY, BANKNIFTY, session). Uses Dhan if available."""
     from tradingagents.utils.market_calendar import get_market_session, is_trading_day
+    from backend.brokers.dhan_market_data import get_market_status as dhan_get_market_status
 
+    # Try Dhan first if available
+    if _use_dhan():
+        try:
+            return dhan_get_market_status()
+        except DhanMarketDataError:
+            pass  # Fall through to Yahoo Finance
+
+    # Fall back to Yahoo Finance
     nifty = yf.Ticker("^NSEI")
     banknifty = yf.Ticker("^NSEBANK")
 
@@ -227,4 +329,5 @@ def get_market_status():
         "is_trading_day": is_trading_day(),
         "nifty": extract_quote(nifty_hist, nifty),
         "banknifty": extract_quote(banknifty_hist, banknifty),
+        "source": "yahoo",
     }

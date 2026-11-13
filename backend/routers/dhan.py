@@ -11,6 +11,7 @@ from backend.brokers.dhan import (
     DhanAuthExpired, DhanConfigError, clear_dhan_access_token, exchange_token_id,
     get_dhan_status, get_login_url, save_dhan_credentials,
 )
+from backend.brokers.dhan_market_data import is_dhan_available
 
 router = APIRouter(prefix="/api/dhan", tags=["dhan"])
 
@@ -34,7 +35,10 @@ def _redirect(query: dict[str, str]) -> RedirectResponse:
 
 @router.get("/status")
 def status():
-    return get_dhan_status()
+    dhan_status = get_dhan_status()
+    dhan_status["market_data_available"] = is_dhan_available()
+    dhan_status["data_provider"] = "dhan" if is_dhan_available() else "yahoo"
+    return dhan_status
 
 
 @router.put("/credentials")

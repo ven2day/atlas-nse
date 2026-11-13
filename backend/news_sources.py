@@ -1,12 +1,13 @@
 """News aggregator — pulls from multiple Indian market news sources.
 
 Supports:
+- Dhan news headlines (when logged in)
 - yfinance search queries (general market / custom queries)
 - RSS feeds from Indian news sites
-- Stock-specific news via yfinance
+- Stock-specific news via yfinance/Dhan
 """
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker, Search
 import feedparser
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -167,6 +168,8 @@ def _safe_link(url) -> str:
 
 def get_news_sources_config() -> dict:
     """Get current news sources configuration (merge DB overrides with defaults)."""
+    from backend.brokers.dhan_market_data import is_dhan_available
+
     # RSS feeds
     db_rss = get_setting("news_rss_feeds")
     if db_rss:
@@ -187,13 +190,23 @@ def get_news_sources_config() -> dict:
     else:
         yf_queries = DEFAULT_YF_QUERIES
 
+    # Dhan news setting
+    dhan_enabled = get_setting("news_dhan_enabled")
+    dhan_available = is_dhan_available()
+
     return {
         "rss_feeds": rss_feeds,
         "yf_queries": yf_queries,
+        "dhan": {
+            "enabled": dhan_enabled != "false",  # Default to True if not set
+            "available": dhan_available,
+            "name": "Dhan News Headlines",
+            "source_type": "dhan",
+        },
     }
 
 
-def save_news_sources_config(rss_feeds: dict = None, yf_queries: list = None):
+def save_news_sources_config(rss_feeds: dict = None, yf_queries: list = None, dhan_enabled: bool = None):
     """Save custom news sources config to DB.
 
     Raises UnsafeFeedURL if any feed URL isn't a public http(s) address.
@@ -206,6 +219,8 @@ def save_news_sources_config(rss_feeds: dict = None, yf_queries: list = None):
         set_setting("news_rss_feeds", json.dumps(rss_feeds))
     if yf_queries is not None:
         set_setting("news_yf_queries", json.dumps(yf_queries))
+    if dhan_enabled is not None:
+        set_setting("news_dhan_enabled", "true" if dhan_enabled else "false")
 
 
 def _parse_rss(feed_key: str, feed_info: dict, max_items: int = 10) -> list[dict]:
@@ -244,7 +259,7 @@ def _parse_rss(feed_key: str, feed_info: dict, max_items: int = 10) -> list[dict
 def _fetch_yf_news_for_query(query: str, max_items: int = 5) -> list[dict]:
     """Fetch news from yfinance for a search query."""
     try:
-        search = yf.Search(query=query, news_count=max_items, enable_fuzzy_query=True)
+        search = Search(query=query, max_results=max_items)
         articles = []
         if search.news:
             for article in search.news[:max_items]:
@@ -277,11 +292,21 @@ def _fetch_yf_news_for_query(query: str, max_items: int = 5) -> list[dict]:
         return []
 
 
-def fetch_all_news(max_per_source: int = 10) -> list[dict]:
-    """Fetch news from all enabled sources in parallel."""
+def fetch_all_news(max_per_source: int = 10, source_filter: str | None = None) -> list[dict]:
+    """Fetch news from all enabled sources in parallel.
+    
+    Args:
+        max_per_source: Maximum articles per source
+        source_filter: Optional filter - "dhan", "rss", "yfinance", or None for all
+    """
+    from backend.brokers.dhan_market_data import is_dhan_available
+
     config = get_news_sources_config()
     rss_feeds = config["rss_feeds"]
     yf_queries = config["yf_queries"]
+    dhan_config = config.get("dhan", {})
+    dhan_enabled = dhan_config.get("enabled", True)
+    dhan_available = is_dhan_available()
 
     all_articles = []
     seen_titles = set()
@@ -289,14 +314,20 @@ def fetch_all_news(max_per_source: int = 10) -> list[dict]:
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
 
-        # RSS feeds
-        for key, info in rss_feeds.items():
-            if info.get("enabled", True):
-                futures.append(executor.submit(_parse_rss, key, info, max_per_source))
+        # RSS feeds (if not filtered out)
+        if source_filter is None or source_filter == "rss":
+            for key, info in rss_feeds.items():
+                if info.get("enabled", True):
+                    futures.append(executor.submit(_parse_rss, key, info, max_per_source))
 
-        # yfinance queries
-        for query in yf_queries:
-            futures.append(executor.submit(_fetch_yf_news_for_query, query, 5))
+        # yfinance queries (if not filtered out)
+        if source_filter is None or source_filter == "yfinance":
+            for query in yf_queries:
+                futures.append(executor.submit(_fetch_yf_news_for_query, query, 5))
+
+        # Dhan news (if enabled, available, and not filtered out)
+        if dhan_enabled and dhan_available and (source_filter is None or source_filter == "dhan"):
+            futures.append(executor.submit(_fetch_dhan_news, max_per_source))
 
         for f in as_completed(futures):
             articles = f.result()
@@ -313,14 +344,56 @@ def fetch_all_news(max_per_source: int = 10) -> list[dict]:
     return all_articles
 
 
+def _fetch_dhan_news(max_items: int = 10) -> list[dict]:
+    """Fetch news headlines from Dhan API."""
+    try:
+        from backend.brokers.dhan_market_data import get_news as dhan_get_news
+        articles = dhan_get_news(count=max_items)
+        # Normalize to match other news sources format
+        normalized = []
+        for art in articles:
+            normalized.append({
+                "source_key": "dhan_news",
+                "source": art.get("publisher", "Dhan"),
+                "source_type": "dhan",
+                "title": art.get("title", ""),
+                "summary": (art.get("summary", "") or "")[:500],
+                "url": art.get("url", ""),
+                "published_at": art.get("published_at", ""),
+            })
+        return normalized
+    except Exception:
+        return []
+
+
 def fetch_ticker_news(ticker: str, max_items: int = 15) -> list[dict]:
     """Fetch news for a specific ticker."""
     from tradingagents.utils.ticker import normalize_ticker
+    from backend.brokers.dhan_market_data import is_dhan_available, get_news as dhan_get_news
+
     symbol = normalize_ticker(ticker)
 
     articles = []
+
+    # Try Dhan news first if available
+    if is_dhan_available():
+        try:
+            dhan_articles = dhan_get_news(ticker=symbol, count=max_items)
+            for art in dhan_articles:
+                articles.append({
+                    "source": art.get("publisher", "Dhan"),
+                    "source_type": "dhan",
+                    "title": art.get("title", ""),
+                    "summary": (art.get("summary", "") or "")[:500],
+                    "url": art.get("url", ""),
+                    "published_at": art.get("published_at", ""),
+                })
+        except Exception:
+            pass
+
+    # Also fetch from Yahoo Finance
     try:
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         news = t.get_news(count=max_items)
         for article in (news or []):
             content = article.get("content", {}) if "content" in article else article
@@ -348,4 +421,12 @@ def fetch_ticker_news(ticker: str, max_items: int = 15) -> list[dict]:
     except Exception as e:
         pass
 
-    return articles
+    # Deduplicate by title
+    seen_titles = set()
+    unique_articles = []
+    for art in articles:
+        if art["title"] and art["title"] not in seen_titles:
+            seen_titles.add(art["title"])
+            unique_articles.append(art)
+
+    return unique_articles[:max_items]

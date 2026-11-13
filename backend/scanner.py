@@ -1,64 +1,16 @@
 """Market Scanner — scan stocks for gaps, volume spikes, breakouts, and more."""
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
+from backend.stock_list import get_nifty_50, get_nifty_100, get_bse_250
 import numpy as np
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tradingagents.utils.ticker import normalize_ticker
 
-# --- Stock Universes ---
-
-NIFTY_50 = [
-    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
-    "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", "BPCL",
-    "BHARTIARTL", "BRITANNIA", "CIPLA", "COALINDIA", "DRREDDY",
-    "EICHERMOT", "ETERNAL", "GRASIM", "HCLTECH", "HDFCBANK",
-    "HDFCLIFE", "HEROMOTOCO", "HINDALCO", "HINDUNILVR", "ICICIBANK",
-    "ITC", "INDUSINDBK", "INFY", "JSWSTEEL", "KOTAKBANK",
-    "LT", "M&M", "MARUTI", "NESTLEIND", "NTPC",
-    "ONGC", "POWERGRID", "RELIANCE", "SBILIFE", "SBIN",
-    "SUNPHARMA", "TCS", "TATACONSUM", "TATAMOTORS", "TATASTEEL",
-    "TECHM", "TITAN", "TRENT", "ULTRACEMCO", "WIPRO",
-]
-
-# NIFTY 100 = NIFTY 50 + Next 50
-NIFTY_NEXT_50 = [
-    "ABB", "ABBOTINDIA", "AMBUJACEM", "AUROPHARMA", "BANKBARODA",
-    "BERGEPAINT", "BOSCHLTD", "CANBK", "CHOLAFIN", "COLPAL",
-    "CONCOR", "DABUR", "DIVISLAB", "DLF", "GAIL",
-    "GODREJCP", "HAVELLS", "ICICIPRULI", "INDHOTEL", "IOC",
-    "IRCTC", "IRFC", "JIOFIN", "JSWENERGY", "LICI",
-    "LODHA", "LUPIN", "MANKIND", "MARICO", "MAXHEALTH",
-    "NHPC", "NMDC", "NAUKRI", "OBEROIRLTY", "OFSS",
-    "PAGEIND", "PFC", "PIDILITIND", "PNB", "POLYCAB",
-    "RECLTD", "SBICARD", "SHREECEM", "SIEMENS", "TORNTPHARM",
-    "TVSMOTOR", "UNIONBANK", "VEDL", "VBL", "ZYDUSLIFE",
-]
-
-NIFTY_100 = NIFTY_50 + NIFTY_NEXT_50
-
-# BSE 250 — top stocks by market cap on BSE (representative subset, yfinance uses .BO suffix)
-# We'll use NIFTY 100 + additional BSE-listed stocks
-BSE_ADDITIONAL = [
-    "ADANIGREEN", "ADANIPOWER", "ALKEM", "ATUL", "APLAPOLLO",
-    "ASTRAL", "AARTI", "BALKRISIND", "BATAINDIA", "BHARATFORG",
-    "BIOCON", "CANFINHOME", "CGPOWER", "CUMMINSIND", "DEEPAKNTR",
-    "DELHIVERY", "DIXON", "ESCORTS", "EXIDEIND", "FEDERALBNK",
-    "FORTIS", "GLENMARK", "GMRINFRA", "GNFC", "GSPL",
-    "HAL", "HDFCAMC", "HINDPETRO", "IDFCFIRSTB", "IEX",
-    "INDIANB", "INDIAMART", "IPCA", "JUBLFOOD", "KALYANKJIL",
-    "KEI", "L&TFH", "LALPATHLAB", "LICHSGFIN", "LINDEINDIA",
-    "LTTS", "M&MFIN", "MFSL", "METROPOLIS", "MPHASIS",
-    "MRF", "MUTHOOTFIN", "NAM-INDIA", "NATIONALUM", "NAVINFLUOR",
-    "PERSISTENT", "PETRONET", "PIIND", "PRESTIGE", "PVRINOX",
-    "RAJESHEXPO", "RAMCOCEM", "RVNL", "SAIL", "SOLARINDS",
-    "SRF", "STARHEALTH", "SUNDARMFIN", "SUPREMEIND", "SYNGENE",
-    "TATACHEM", "TATACOMM", "TATAELXSI", "TATAPOWER", "TORNTPOWER",
-    "TRIDENT", "TTML", "UBL", "UNITDSPR", "UPL",
-    "VOLTAS", "WHIRLPOOL", "YESBANK", "ZEEL", "ZOMATO",
-]
-
-BSE_250 = NIFTY_100 + BSE_ADDITIONAL
+# --- Stock Universes — all from CSV via stock_list ---
+NIFTY_50 = get_nifty_50()
+NIFTY_100 = get_nifty_100()
+BSE_250 = get_bse_250()
 
 UNIVERSES = {
     "nifty50": NIFTY_50,
@@ -78,7 +30,7 @@ def _fetch_stock_data(ticker: str, period: str = "3mo") -> dict | None:
     """Fetch OHLCV data for a single stock."""
     try:
         symbol = f"{ticker}.NS"
-        t = yf.Ticker(symbol)
+        t = Ticker(symbol)
         hist = t.history(period=period)
         if hist.empty or len(hist) < 5:
             return None

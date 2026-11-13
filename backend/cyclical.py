@@ -1,14 +1,20 @@
 """Cyclical pattern analysis — monthly seasonality, sector rotation, event cycles."""
 
-import yfinance as yf
+from backend.brokers.market_data_provider import Ticker
+from backend.stock_list import get_all_symbols
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 from tradingagents.utils.ticker import normalize_ticker
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-SECTOR_MAP = {
+# Dhan's v2 API exposes no sector/industry endpoint, so sector membership is a
+# curated static map. It is filtered to `config/symbols.csv` (the single source
+# of truth) so sector rotation never fetches a symbol the user hasn't listed —
+# e.g. TATAMOTORS, which is present below as a known Auto name but absent from
+# the CSV, is dropped here.
+_SECTOR_DEFINITIONS: dict[str, list[str]] = {
     "IT": ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM", "LTTS", "MPHASIS", "PERSISTENT"],
     "Banks": ["HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "INDUSINDBK", "BANKBARODA", "PNB"],
     "Pharma": ["SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB", "LUPIN", "AUROPHARMA", "TORNTPHARM"],
@@ -20,11 +26,18 @@ SECTOR_MAP = {
     "Finance": ["BAJFINANCE", "BAJAJFINSV", "CHOLAFIN", "M&MFIN", "HDFCLIFE", "SBILIFE", "ICICIPRULI"],
 }
 
+_CSV_SYMBOLS = set(get_all_symbols())
+SECTOR_MAP: dict[str, list[str]] = {
+    sector: [t for t in tickers if t in _CSV_SYMBOLS]
+    for sector, tickers in _SECTOR_DEFINITIONS.items()
+}
+SECTOR_MAP = {sector: tickers for sector, tickers in SECTOR_MAP.items() if tickers}
+
 
 def analyze_monthly_seasonality(ticker: str, years: int = 5) -> dict:
     """Analyze monthly return patterns for a stock over N years."""
     symbol = normalize_ticker(ticker)
-    t = yf.Ticker(symbol)
+    t = Ticker(symbol)
     hist = t.history(period=f"{years}y")
 
     if hist.empty or len(hist) < 100:
@@ -86,7 +99,7 @@ def analyze_monthly_seasonality(ticker: str, years: int = 5) -> dict:
 def analyze_day_of_week(ticker: str, months: int = 6) -> dict:
     """Analyze day-of-week return patterns."""
     symbol = normalize_ticker(ticker)
-    t = yf.Ticker(symbol)
+    t = Ticker(symbol)
     hist = t.history(period=f"{months}mo")
 
     if hist.empty or len(hist) < 20:
@@ -128,7 +141,7 @@ def analyze_sector_rotation(months: int = 3) -> dict:
         for ticker in tickers[:5]:  # Top 5 stocks per sector for speed
             try:
                 symbol = f"{ticker}.NS"
-                t = yf.Ticker(symbol)
+                t = Ticker(symbol)
                 hist = t.history(period=f"{months}mo")
                 if len(hist) > 10:
                     ret = float((hist["Close"].iloc[-1] / hist["Close"].iloc[0] - 1) * 100)
@@ -162,7 +175,7 @@ def backtest_seasonal_strategy(ticker: str, buy_months: list[int], sell_months: 
     This is FREE — no AI calls, pure price math.
     """
     symbol = normalize_ticker(ticker)
-    t = yf.Ticker(symbol)
+    t = Ticker(symbol)
     hist = t.history(period=f"{years}y")
 
     if hist.empty or len(hist) < 100:

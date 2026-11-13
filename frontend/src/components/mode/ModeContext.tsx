@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { LineChart, Zap } from "lucide-react";
 
 export type TradingMode = "swing" | "intraday";
@@ -47,17 +48,37 @@ export function useMode(): ModeContextValue {
   return ctx;
 }
 
-/** Segmented control to flip between Swing and Intraday at any time. */
-export function ModeSwitch() {
+/** Segmented control to flip between Swing and Intraday at any time.
+ * With `navigate` it also routes to the matching workspace, preserving an
+ * already selected ticker via `symbol` when one is provided.
+ */
+export function ModeSwitch({
+  navigate = false,
+  symbol,
+}: {
+  navigate?: boolean;
+  symbol?: string;
+}) {
   const { mode, setMode, ready } = useMode();
+  const router = useRouter();
   if (!ready) return null;
+
+  const select = (m: TradingMode) => {
+    setMode(m);
+    if (navigate) {
+      const trimmed = symbol?.trim();
+      router.push(
+        trimmed ? `/${m}?symbol=${encodeURIComponent(trimmed)}` : `/${m}`,
+      );
+    }
+  };
 
   const item = (m: TradingMode, label: string, Icon: typeof LineChart, activeColor: string) => {
     const active = mode === m;
     return (
       <button
         type="button"
-        onClick={() => setMode(m)}
+        onClick={() => select(m)}
         aria-pressed={active}
         className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
           active ? `bg-background shadow-sm ${activeColor}` : "text-muted-foreground hover:text-foreground"

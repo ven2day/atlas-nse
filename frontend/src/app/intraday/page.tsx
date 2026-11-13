@@ -8,11 +8,13 @@ import { QuoteHeader, type Quote } from "@/components/stock/QuoteHeader";
 import { PaperTrading } from "@/components/paper/PaperTrading";
 import { IndicatorsChart, type IndicatorPaneGroup } from "@/components/stock/IndicatorsChart";
 import type { Candle } from "@/lib/indicators";
+import type { MarketStatus } from "@/lib/types";
 import { INDICATORS, INDICATOR_BY_ID, INDICATOR_PRESETS, type IndicatorLine } from "@/lib/indicator-registry";
-import { getChartData, getQuote } from "@/lib/api";
+import { getChartData, getMarketStatus, getQuote } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, X } from "lucide-react";
 
 const INTERVALS = ["1m", "5m", "15m", "1h"];
 
@@ -48,6 +50,31 @@ function isPoint(value: unknown): value is ChartPoint {
 
 const CATEGORIES = [...new Set(INDICATORS.map((i) => i.category))];
 
+/** Compact market-session badge (OPEN / CLOSED / PRE-MARKET / …) shown by the chart. */
+function MarketStateBadge() {
+  const [status, setStatus] = useState<MarketStatus | null>(null);
+
+  useEffect(() => {
+    getMarketStatus().then((d) => setStatus(d as MarketStatus | null)).catch(() => {});
+  }, []);
+
+  if (!status) return null;
+
+  const colors: Record<string, string> = {
+    open: "border-green-500/30 bg-green-500/20 text-green-400",
+    pre_market: "border-yellow-500/30 bg-yellow-500/20 text-yellow-400",
+    closing_hour: "border-orange-500/30 bg-orange-500/20 text-orange-400",
+    post_market: "border-blue-500/30 bg-blue-500/20 text-blue-400",
+    closed: "border-red-500/30 bg-red-500/20 text-red-400",
+  };
+
+  return (
+    <Badge variant="outline" className={colors[status.session] || colors.closed}>
+      {status.session.replace("_", " ").toUpperCase()}
+    </Badge>
+  );
+}
+
 function IntradayContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,6 +85,7 @@ function IntradayContent() {
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [loadingChart, setLoadingChart] = useState(false);
   const [activeIds, setActiveIds] = useState<string[]>([]);
+  const [indicatorsOpen, setIndicatorsOpen] = useState(false);
 
   const toggle = (id: string) => {
     setActiveIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -66,6 +94,8 @@ function IntradayContent() {
   const applyPreset = (indicatorIds: string[]) => {
     setActiveIds(indicatorIds);
   };
+
+  const clearIndicators = () => setActiveIds([]);
 
   const select = useCallback(
     (symbol: string) => {
@@ -147,7 +177,7 @@ function IntradayContent() {
         >
           <ArrowLeft className="h-4 w-4" /> Home
         </button>
-        <ModeSwitch />
+        <ModeSwitch navigate symbol={ticker} />
       </div>
 
       {!ticker ? (
@@ -168,61 +198,130 @@ function IntradayContent() {
 
           <QuoteHeader quote={quote} loading={loadingQuote && !quote} />
 
-          <div className="flex gap-1 flex-wrap">
-            {INTERVALS.map((i) => (
-              <Button key={i} variant={interval === i ? "default" : "outline"} size="sm" onClick={() => setIntervalValue(i)} disabled={loadingChart}>
-                {i}
-              </Button>
-            ))}
-          </div>
+          {/* Indicator controls — compact and collapsible */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">Indicators</h3>
+                  {activeIds.length > 0 && (
+                    <span className="text-xs text-muted-foreground">{activeIds.length} active</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {activeIds.length > 0 && (
+                    <Button size="sm" variant="ghost" onClick={clearIndicators}>
+                      Clear
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => setIndicatorsOpen((v) => !v)} aria-expanded={indicatorsOpen}>
+                    {indicatorsOpen ? "Hide" : "Show"}
+                    {indicatorsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </Button>
+                </div>
+              </div>
 
-          {/* Strategy presets */}
-          <div className="flex flex-wrap gap-1.5">
-            {INDICATOR_PRESETS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => applyPreset(p.indicatorIds)}
-                title={p.description}
-                className="rounded-full px-3 py-1 text-xs font-medium border border-primary/30 text-primary hover:bg-primary/5 transition-colors"
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Grouped indicator picker */}
-          <div className="space-y-2">
-            {CATEGORIES.map((cat) => (
-              <div key={cat} className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-28 flex-none">{cat}</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {INDICATORS.filter((i) => i.category === cat).map((ind) => {
-                    const active = activeIds.includes(ind.id);
+              {/* Selected indicators shown clearly, even when collapsed */}
+              {activeIds.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {activeIds.map((id) => {
+                    const def = INDICATOR_BY_ID[id];
+                    if (!def) return null;
                     return (
                       <button
-                        key={ind.id}
+                        key={id}
                         type="button"
-                        onClick={() => toggle(ind.id)}
-                        title={ind.short}
-                        className={`rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
-                          active
-                            ? "bg-primary/10 text-primary border-primary/40"
-                            : "bg-card text-muted-foreground border-border hover:text-foreground"
-                        }`}
+                        onClick={() => toggle(id)}
+                        title={def.short}
+                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                       >
-                        {ind.name}
+                        {def.name}
+                        <X className="h-3 w-3" />
                       </button>
                     );
                   })}
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+
+              {indicatorsOpen && (
+                <div className="mt-3 pt-3 border-t border-border space-y-3">
+                  {/* Strategy presets */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                      Presets
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {INDICATOR_PRESETS.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => applyPreset(p.indicatorIds)}
+                          title={p.description}
+                          className="rounded-full px-3 py-1 text-xs font-medium border border-primary/30 text-primary hover:bg-primary/5 transition-colors"
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Grouped indicator picker */}
+                  <div className="space-y-2">
+                    {CATEGORIES.map((cat) => (
+                      <div key={cat} className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-28 flex-none">
+                          {cat}
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {INDICATORS.filter((i) => i.category === cat).map((ind) => {
+                            const active = activeIds.includes(ind.id);
+                            return (
+                              <button
+                                key={ind.id}
+                                type="button"
+                                onClick={() => toggle(ind.id)}
+                                title={ind.short}
+                                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
+                                  active
+                                    ? "bg-primary/10 text-primary border-primary/40"
+                                    : "bg-card text-muted-foreground border-border hover:text-foreground"
+                                }`}
+                              >
+                                {ind.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <Card className="lg:col-span-2">
               <CardContent className="p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-muted-foreground">Live chart</h2>
+                    <MarketStateBadge />
+                  </div>
+                  <div className="flex gap-1">
+                    {INTERVALS.map((i) => (
+                      <Button
+                        key={i}
+                        variant={interval === i ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setIntervalValue(i)}
+                        disabled={loadingChart}
+                      >
+                        {i}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
                 {candles.length > 0 ? (
                   <>
                     <IndicatorsChart candles={candles} priceLines={priceLines} panes={panes} height={560} />

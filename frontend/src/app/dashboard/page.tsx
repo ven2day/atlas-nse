@@ -43,42 +43,37 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground mt-1">{getDayContext()}</p>
       </div>
 
-      {/* Market Status Bar */}
+      {/* 1. Market context */}
       <MarketOverview />
 
-      {/* Market Regime Badge — shows current regime (Bull/Bear/Sideways/High-Vol)
-          so traders know which conditional signal weights to expect */}
-      <RegimeBadge />
-
-      {/* === HEADLINE DECISION CARD ===
-          Synthesizes all filters into one TRADE / SELECTIVE / STAND DOWN verdict */}
+      {/* 2. Today's verdict */}
       <DailyVerdict />
 
-      {/* FII/DII Flow Banner */}
-      <FIIDIIBanner />
-
-      {/* Calendar / Events Banner */}
-      <CalendarBanner />
-
-      {/* Sector Concentration Widget — auto-hides if no open positions */}
-      <ConcentrationWidget />
-
-      {/* Today's Top Picks — auto-loaded */}
+      {/* 3. Today's top picks */}
       <TodayPicks universe="nifty100" />
 
-      {/* Sector Heatmap */}
+      {/* Supporting context — compact grid instead of stacked full-width banners */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+        <RegimeBadge />
+        <FIIDIIBanner />
+        <CalendarBanner />
+        {/* Sector Concentration Widget — auto-hides if no open positions */}
+        <ConcentrationWidget />
+      </div>
+
+      {/* Secondary: sector heatmap */}
       <SectorHeatmap />
 
-      {/* Workflow Guide */}
+      {/* Secondary: workflow guide (collapsed by default) */}
       <WorkflowGuide />
 
-      {/* Watchlist + Recent Analyses side by side */}
+      {/* Secondary: watchlist + recent analyses */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Watchlist />
         <RecentAnalyses />
       </div>
 
-      {/* Quick Actions */}
+      {/* Secondary: quick actions (collapsed by default) */}
       <QuickActions />
     </div>
   );

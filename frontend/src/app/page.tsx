@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TickerSearch } from "@/components/TickerSearch";
 import { ModeSwitch, useMode } from "@/components/mode/ModeContext";
@@ -80,6 +81,15 @@ export default function HomePage() {
             cta="Open the chart"
             onClick={() => open("intraday")}
           />
+        </div>
+
+        <div className="mt-10 text-center">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            Open today&apos;s dashboard <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </div>

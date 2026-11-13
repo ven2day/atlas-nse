@@ -111,6 +111,9 @@ export function PaperTrading({ ticker, price }: { ticker: string; price: number 
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Practice trading</h3>
+            <Badge variant="outline" className="border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-300">
+              Simulated
+            </Badge>
           </div>
           <button type="button" onClick={reset} className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
             <RotateCcw className="h-3 w-3" /> Reset

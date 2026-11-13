@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { MobileNav } from "@/components/layout/MobileNav";
 import { MainContent } from "@/components/theme/MainContent";
 import { getAuthStatus } from "@/lib/api";
 
@@ -43,7 +44,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar />
-      <MainContent>{children}</MainContent>
+      <div className="flex min-h-screen flex-1 flex-col">
+        <MobileNav />
+        <MainContent>{children}</MainContent>
+      </div>
     </>
   );
 }

@@ -9,6 +9,6 @@ export const MainContent = memo(function MainContent({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex-1 ml-64 min-h-screen bg-background">{children}</main>
+    <main className="flex-1 bg-background lg:ml-64">{children}</main>
   );
 });

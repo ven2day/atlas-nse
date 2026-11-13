@@ -11,7 +11,7 @@ import { METRIC_EXPLANATIONS } from "@/lib/explanations";
 import { MetricTooltip } from "@/components/stock/MetricTooltip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 
 const PERIODS = ["1mo", "3mo", "6mo", "1y"];
 
@@ -20,6 +20,13 @@ function fmt(value: unknown): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return "Not available";
   return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+function fmtPct(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "Not available";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "Not available";
+  return `${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}%`;
 }
 
 function SwingContent() {
@@ -72,7 +79,7 @@ function SwingContent() {
         >
           <ArrowLeft className="h-4 w-4" /> Home
         </button>
-        <ModeSwitch />
+        <ModeSwitch navigate symbol={ticker} />
       </div>
 
       {!ticker ? (
@@ -100,27 +107,35 @@ function SwingContent() {
 
           <QuoteHeader quote={quote} loading={loading} />
 
-          <div className="flex gap-1">
-            {PERIODS.map((p) => (
-              <Button key={p} variant={period === p ? "default" : "outline"} size="sm" onClick={() => setPeriod(p)} disabled={loading}>
-                {p}
-              </Button>
-            ))}
-          </div>
-
           <Card>
             <CardContent className="p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-muted-foreground">Price chart</h2>
+                <div className="flex gap-1">
+                  {PERIODS.map((p) => (
+                    <Button
+                      key={p}
+                      variant={period === p ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPeriod(p)}
+                      disabled={loading}
+                    >
+                      {p}
+                    </Button>
+                  ))}
+                </div>
+              </div>
               {chart.length > 0 ? (
-                <CandlestickChart data={chart} height={420} />
+                <CandlestickChart data={chart} height={460} />
               ) : (
-                <div className="h-[420px] flex items-center justify-center text-muted-foreground">
+                <div className="h-[460px] flex items-center justify-center text-muted-foreground">
                   {loading ? "Loading chart…" : "No chart data for this stock."}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <FundamentalsGrid data={fundamentals} />
+          <Fundamentals data={fundamentals} />
           <HowToReadStock data={fundamentals} />
         </>
       )}
@@ -128,49 +143,90 @@ function SwingContent() {
   );
 }
 
-function FundamentalsGrid({ data }: { data: Record<string, unknown> | null }) {
-  type Row = { key: string; label: string; value: string };
-  const rows: Row[] = [
-    { key: "sector", label: "Sector", value: `${fmt(data?.sector)}${data?.industry ? ` · ${fmt(data?.industry)}` : ""}` },
-    { key: "pe_ratio", label: "P/E ratio", value: fmt(data?.pe_ratio) },
-    { key: "forward_pe", label: "Forward P/E", value: fmt(data?.forward_pe) },
-    { key: "pb_ratio", label: "Price / Book", value: fmt(data?.pb_ratio) },
-    { key: "roe", label: "Return on equity", value: data?.roe != null ? `${fmt(data.roe)}%` : "Not available" },
-    { key: "eps", label: "EPS", value: fmt(data?.eps) },
-    { key: "dividend_yield", label: "Dividend yield", value: data?.dividend_yield != null ? `${fmt(data.dividend_yield)}%` : "Not available" },
-    { key: "market_cap", label: "Market cap", value: fmt(data?.market_cap) },
-    { key: "beta", label: "Beta", value: fmt(data?.beta) },
-    { key: "debt_to_equity", label: "Debt / equity", value: fmt(data?.debt_to_equity) },
-    { key: "profit_margin", label: "Profit margin", value: data?.profit_margin != null ? `${fmt(data.profit_margin)}%` : "Not available" },
-    { key: "fifty_two_week_high", label: "52w high", value: fmt(data?.fifty_two_week_high) },
-    { key: "fifty_two_week_low", label: "52w low", value: fmt(data?.fifty_two_week_low) },
+function Fundamentals({ data }: { data: Record<string, unknown> | null }) {
+  type Metric = { key: string; label: string; value: string };
+
+  const sections: { title: string; metrics: Metric[] }[] = [
+    {
+      title: "Valuation",
+      metrics: [
+        { key: "pe_ratio", label: "P/E ratio", value: fmt(data?.pe_ratio) },
+        { key: "forward_pe", label: "Forward P/E", value: fmt(data?.forward_pe) },
+        { key: "pb_ratio", label: "Price / Book", value: fmt(data?.pb_ratio) },
+        { key: "eps", label: "EPS", value: fmt(data?.eps) },
+        { key: "dividend_yield", label: "Dividend yield", value: fmtPct(data?.dividend_yield) },
+        { key: "market_cap", label: "Market cap", value: fmt(data?.market_cap) },
+      ],
+    },
+    {
+      title: "Quality",
+      metrics: [
+        { key: "roe", label: "Return on equity", value: fmtPct(data?.roe) },
+        { key: "profit_margin", label: "Profit margin", value: fmtPct(data?.profit_margin) },
+      ],
+    },
+    {
+      title: "Risk",
+      metrics: [
+        { key: "debt_to_equity", label: "Debt / equity", value: fmt(data?.debt_to_equity) },
+        { key: "beta", label: "Beta", value: fmt(data?.beta) },
+      ],
+    },
+    {
+      title: "Price Range",
+      metrics: [
+        { key: "fifty_two_week_high", label: "52w high", value: fmt(data?.fifty_two_week_high) },
+        { key: "fifty_two_week_low", label: "52w low", value: fmt(data?.fifty_two_week_low) },
+      ],
+    },
   ];
+
+  const sectorLabel = [data?.sector, data?.industry]
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .join(" · ");
 
   return (
     <div>
-      <div className="flex items-baseline gap-2">
-        <h2 className="text-lg font-semibold mb-3">Fundamentals</h2>
-        <span className="text-xs text-muted-foreground">hover the ⓘ to learn each one</span>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h2 className="text-lg font-semibold">Fundamentals</h2>
+        {sectorLabel && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            {sectorLabel}
+            <MetricTooltip
+              text={`${METRIC_EXPLANATIONS.sector.plain} ${METRIC_EXPLANATIONS.sector.howToRead}`}
+            />
+          </span>
+        )}
+        <span className="text-xs text-muted-foreground">Hover ⓘ to learn each metric</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-        {rows.map((row) => {
-          const explanation = METRIC_EXPLANATIONS[row.key];
-          return (
-            <div key={row.key} className="rounded-lg border border-border/60 bg-card px-3 py-2.5">
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                {row.label}
-                {explanation && <MetricTooltip text={`${explanation.plain} ${explanation.howToRead}`} />}
-              </p>
-              <p className="text-sm font-medium tabular-nums">{row.value}</p>
+
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 items-start">
+        {sections.map((section) => (
+          <section key={section.title}>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-2">{section.title}</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {section.metrics.map((m) => {
+                const explanation = METRIC_EXPLANATIONS[m.key];
+                return (
+                  <div key={m.key} className="rounded-lg border border-border/60 bg-card px-3 py-2.5">
+                    <p className="text-[11px] text-muted-foreground flex items-center justify-between gap-1">
+                      <span>{m.label}</span>
+                      {explanation && <MetricTooltip text={`${explanation.plain} ${explanation.howToRead}`} />}
+                    </p>
+                    <p className="text-sm font-medium tabular-nums">{m.value}</p>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </section>
+        ))}
       </div>
     </div>
   );
 }
 
 function HowToReadStock({ data }: { data: Record<string, unknown> | null }) {
+  const [open, setOpen] = useState(false);
   const sector = typeof data?.sector === "string" ? data.sector : null;
   const pe = Number(data?.pe_ratio);
   const roe = Number(data?.roe);
@@ -188,25 +244,36 @@ function HowToReadStock({ data }: { data: Record<string, unknown> | null }) {
   return (
     <Card>
       <CardContent className="p-5">
-        <h2 className="text-lg font-semibold">How to read {name || "this stock"}</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          A guided pass through the fundamentals above — read each, form your own view.
-        </p>
-        {notes.length > 0 ? (
-          <ol className="space-y-2">
-            {notes.map((n, i) => (
-              <li key={i} className="flex gap-3 text-sm text-muted-foreground">
-                <span className="flex-none h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">{i + 1}</span>
-                <span>{n}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="text-sm text-muted-foreground">Search a stock to see its guided fundamentals walkthrough.</p>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">How to read {name || "this stock"}</h2>
+          <Button size="sm" variant="ghost" onClick={() => setOpen(!open)} aria-expanded={open}>
+            {open ? "Hide" : "Show"}
+            {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </Button>
+        </div>
+
+        {open && (
+          <>
+            <p className="mt-3 text-xs text-muted-foreground">
+              A guided pass through the fundamentals above — read each, form your own view.
+            </p>
+            {notes.length > 0 ? (
+              <ol className="mt-3 space-y-2">
+                {notes.map((n, i) => (
+                  <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+                    <span className="flex-none h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">{i + 1}</span>
+                    <span>{n}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">Search a stock to see its guided fundamentals walkthrough.</p>
+            )}
+            <p className="mt-4 text-xs text-muted-foreground">
+              This is educational — it explains the numbers, it doesn&apos;t tell you what to buy or sell.
+            </p>
+          </>
         )}
-        <p className="mt-4 text-xs text-muted-foreground">
-          This is educational — it explains the numbers, it doesn't tell you what to buy or sell.
-        </p>
       </CardContent>
     </Card>
   );

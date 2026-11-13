@@ -75,7 +75,7 @@ def get_open_positions() -> list[dict]:
                 "signal": ah.get("signal"),
             })
 
-    # Local manual/Kite holdings are actual portfolio exposure and must be
+    # Local manual/Dhan holdings are actual portfolio exposure and must be
     # visible to the same concentration guard as simulated/open analyses.
     for position in list_positions():
         ticker = (position.get("tradingsymbol") or "").upper()
@@ -132,7 +132,7 @@ def get_sector_allocation(total_capital: float = DEFAULT_TOTAL_CAPITAL) -> dict:
         sector = pos.get("sector", "Other")
         # Position value approximation — need shares info or just count positions
         # For simplicity, equal-weight assumption: each position = total_capital / max_positions
-        # In practice, this would integrate with Kite real position values
+        # In practice, this would integrate with Dhan real position values
         position_value = pos.get("position_value") or (total_capital / 10)  # rough estimate
         pos["position_value"] = position_value
         by_sector[sector].append(pos)

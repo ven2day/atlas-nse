@@ -4,17 +4,17 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   getEquityPortfolioReviewHistory,
-  getKiteLoginUrl,
-  getKiteStatus,
+  getDhanLoginUrl,
+  getDhanStatus,
   getLatestEquityPortfolioReview,
   getPositions,
   getTelegramStatus,
-  logoutKite,
+  logoutDhan,
   runEquityPortfolioReview,
   saveTelegramSettings,
   sendLatestEquityPortfolioReviewTelegram,
   sendTelegramTest,
-  saveKiteCredentials,
+  saveDhanCredentials,
 } from "@/lib/api";
 import { PositionsPanel } from "@/components/portfolio/PositionsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,26 +43,26 @@ import { HelpSection } from "@/components/HelpSection";
 const equityHelp = [
   {
     question: "How do I get holdings into the review?",
-    answer: "Connect Kite and use Sync from Kite, or add a position manually. Sync is explicit and read-only; manual rows are preserved when Kite is synchronized.",
+    answer: "Connect Dhan and use Sync from Dhan, or add a position manually. Sync is explicit and read-only; manual rows are preserved when Dhan is synchronized.",
   },
   {
     question: "What does Run Review do?",
     answer: "It reviews the positions stored locally, calculates P&L, sector allocation, concentration warnings, and action flags, then saves a dated snapshot. It never places orders.",
   },
   {
-    question: "Why is Kite login required each day?",
-    answer: "Kite access tokens are treated as daily sessions. The app stores only the current token metadata needed for the read-only holdings fetch and asks you to reconnect when the token expires.",
+    question: "Why is Dhan login required each day?",
+    answer: "Dhan access tokens are 24-hour sessions. The app stores only the current token metadata needed for the read-only holdings fetch and asks you to reconnect when the token expires.",
   },
 ];
 
-type KiteStatus = {
+type DhanStatus = {
   configured: boolean;
   connected_today: boolean;
   token_date?: string | null;
+  masked_client_id?: string | null;
   masked_api_key?: string | null;
   profile?: {
-    user_shortname?: string;
-    user_name?: string;
+    client_name?: string;
   } | null;
 };
 
@@ -313,13 +313,14 @@ function RiskPanel({ review }: { review: Review }) {
 
 function EquityPortfolioAnalysisContent() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<KiteStatus | null>(null);
+  const [status, setStatus] = useState<DhanStatus | null>(null);
   const [latest, setLatest] = useState<LatestReviewResponse | null>(null);
   const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
   const [history, setHistory] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [clientId, setClientId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [botToken, setBotToken] = useState("");
@@ -333,14 +334,14 @@ function EquityPortfolioAnalysisContent() {
   const load = async () => {
     setLoading(true);
     try {
-      const [kiteStatus, telegramStatusRes, latestReviewRes, historyRes, positionsRes] = await Promise.all([
-        getKiteStatus() as Promise<KiteStatus>,
+      const [dhanStatus, telegramStatusRes, latestReviewRes, historyRes, positionsRes] = await Promise.all([
+        getDhanStatus() as Promise<DhanStatus>,
         getTelegramStatus().catch(() => null),
         getLatestEquityPortfolioReview().catch(() => ({ found: false, review: null })),
         getEquityPortfolioReviewHistory(30).catch(() => ({ reviews: [] })),
         getPositions().catch(() => ({ count: 0 })),
       ]);
-      setStatus(kiteStatus);
+      setStatus(dhanStatus);
       setTelegramStatus(telegramStatusRes as TelegramStatus | null);
       setLatest(latestReviewRes as LatestReviewResponse);
       setHistory((historyRes as ReviewHistoryResponse).reviews || []);
@@ -353,10 +354,10 @@ function EquityPortfolioAnalysisContent() {
   };
 
   useEffect(() => {
-    const kite = searchParams.get("kite");
+    const dhan = searchParams.get("dhan");
     const message = searchParams.get("message");
-    if (kite === "connected") toast.success("Kite connected for today");
-    if (kite === "error") toast.error(message || "Kite login failed");
+    if (dhan === "connected") toast.success("Dhan connected for today");
+    if (dhan === "error") toast.error(message || "Dhan login failed");
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -364,24 +365,27 @@ function EquityPortfolioAnalysisContent() {
   const saveCredentials = async () => {
     setSaving(true);
     try {
-      const result = await saveKiteCredentials({ api_key: apiKey, api_secret: apiSecret }) as KiteStatus;
+      const result = await saveDhanCredentials({
+        client_id: clientId, api_key: apiKey, api_secret: apiSecret,
+      }) as DhanStatus;
       setStatus(result);
+      setClientId("");
       setApiKey("");
       setApiSecret("");
-      toast.success("Kite credentials saved");
+      toast.success("Dhan credentials saved");
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to save Kite credentials"));
+      toast.error(errorMessage(e, "Failed to save Dhan credentials"));
     } finally {
       setSaving(false);
     }
   };
 
-  const connectKite = async () => {
+  const connectDhan = async () => {
     try {
-      const result = await getKiteLoginUrl() as { login_url: string };
+      const result = await getDhanLoginUrl() as { login_url: string };
       window.location.href = result.login_url;
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to create Kite login URL"));
+      toast.error(errorMessage(e, "Failed to create Dhan login URL"));
     }
   };
 
@@ -402,11 +406,11 @@ function EquityPortfolioAnalysisContent() {
 
   const disconnect = async () => {
     try {
-      const result = await logoutKite() as { kite: KiteStatus };
-      setStatus(result.kite);
-      toast.success("Kite session cleared");
+      const result = await logoutDhan() as { dhan: DhanStatus };
+      setStatus(result.dhan);
+      toast.success("Dhan session cleared");
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to clear Kite session"));
+      toast.error(errorMessage(e, "Failed to clear Dhan session"));
     }
   };
 
@@ -460,7 +464,7 @@ function EquityPortfolioAnalysisContent() {
       <div className="p-6">
         <div className="py-20 text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-          <p className="text-sm text-muted-foreground mt-3">Loading Kite portfolio state...</p>
+          <p className="text-sm text-muted-foreground mt-3">Loading Dhan portfolio state...</p>
         </div>
       </div>
     );
@@ -473,7 +477,7 @@ function EquityPortfolioAnalysisContent() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Wallet className="h-6 w-6" /> Equity portfolio analysis
           </h1>
-          <p className="text-sm text-muted-foreground">Read-only Kite holdings review with stored daily insights</p>
+          <p className="text-sm text-muted-foreground">Read-only Dhan holdings review with stored daily insights</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={runReview} disabled={running || positionCount === 0}>
@@ -492,18 +496,23 @@ function EquityPortfolioAnalysisContent() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {status?.configured ? "Update Kite Credentials" : "Kite Credentials"}
+              {status?.configured ? "Update Dhan Credentials" : "Dhan Credentials"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 max-w-xl">
-            <Input placeholder="KITE_API_KEY" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
             <Input
-              placeholder="KITE_API_SECRET"
+              placeholder="DHAN_CLIENT_ID"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+            <Input placeholder="DHAN_API_KEY" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <Input
+              placeholder="DHAN_API_SECRET"
               type="password"
               value={apiSecret}
               onChange={(e) => setApiSecret(e.target.value)}
             />
-            <Button onClick={saveCredentials} disabled={saving || !apiKey || !apiSecret}>
+            <Button onClick={saveCredentials} disabled={saving || !clientId || !apiKey || !apiSecret}>
               {saving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
               {status?.configured ? "Update Credentials" : "Save Credentials"}
             </Button>
@@ -515,13 +524,14 @@ function EquityPortfolioAnalysisContent() {
         <Card className="border-blue-100 dark:border-blue-800">
           <CardContent className="p-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="font-medium">Kite login required for today</p>
+              <p className="font-medium">Dhan login required for today</p>
               <p className="text-sm text-muted-foreground">
-                API key {status.masked_api_key || "saved"} is configured. Complete Kite login to fetch holdings.
+                Client ID {status.masked_client_id || "saved"} and API key {status.masked_api_key || "saved"} are
+                configured. Complete Dhan login to fetch holdings.
               </p>
             </div>
-            <Button onClick={connectKite}>
-              <ExternalLink className="h-3 w-3 mr-1" /> Connect Kite for Today
+            <Button onClick={connectDhan}>
+              <ExternalLink className="h-3 w-3 mr-1" /> Connect Dhan for Today
             </Button>
           </CardContent>
         </Card>
@@ -533,9 +543,9 @@ function EquityPortfolioAnalysisContent() {
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <div>
-                <p className="text-sm font-medium">Kite connected for today</p>
+                <p className="text-sm font-medium">Dhan connected for today</p>
                 <p className="text-xs text-muted-foreground">
-                  {status.profile?.user_shortname || status.profile?.user_name || "Zerodha account"} · token date {status.token_date}
+                  {status.profile?.client_name || "Dhan account"} · token date {status.token_date}
                 </p>
               </div>
             </div>
@@ -544,7 +554,7 @@ function EquityPortfolioAnalysisContent() {
       )}
 
       <PositionsPanel
-        kiteConnected={!!status?.connected_today}
+        dhanConnected={!!status?.connected_today}
         onPositionCountChange={setPositionCount}
       />
 
@@ -696,7 +706,7 @@ function EquityPortfolioAnalysisContent() {
             <PieChart className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
             <p className="font-medium">No equity portfolio review saved yet</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Connect Kite or add positions manually, then run your first holdings review.
+              Connect Dhan or add positions manually, then run your first holdings review.
             </p>
             <Button className="mt-4" onClick={runReview} disabled={running || positionCount === 0}>
               {running ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
@@ -753,7 +763,7 @@ export default function EquityPortfolioAnalysisPage() {
         <div className="p-6">
           <div className="py-20 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="text-sm text-muted-foreground mt-3">Loading Kite portfolio state...</p>
+            <p className="text-sm text-muted-foreground mt-3">Loading Dhan portfolio state...</p>
           </div>
         </div>
       }

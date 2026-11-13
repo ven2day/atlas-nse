@@ -316,9 +316,9 @@ class FeedSettingsApiTests(IsolatedStateTestCase, unittest.TestCase):
 class OpenModeRequestTests(IsolatedStateTestCase, unittest.TestCase):
     def test_this_machines_own_requests_are_allowed(self):
         with patch.dict(os.environ, OPEN_MODE_ENV), open_mode_client() as client:
-            no_origin = client.post("/api/kite/logout")
-            frontend = client.post("/api/kite/logout", headers={"Origin": "http://localhost:3000"})
-            same_origin_docs = client.post("/api/kite/logout", headers={"Origin": "http://localhost:8000"})
+            no_origin = client.post("/api/dhan/logout")
+            frontend = client.post("/api/dhan/logout", headers={"Origin": "http://localhost:3000"})
+            same_origin_docs = client.post("/api/dhan/logout", headers={"Origin": "http://localhost:8000"})
             loopback_ip = client.get("/api/health", headers={"Host": "127.0.0.1:8000"})
 
         for response in (no_origin, frontend, same_origin_docs, loopback_ip):

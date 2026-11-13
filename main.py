@@ -15,17 +15,16 @@ load_dotenv(override=True)
 # Create config for Indian market short-term trading
 config = DEFAULT_CONFIG.copy()
 
-# LLM settings — Anthropic Claude
-config["llm_provider"] = "anthropic"
-config["deep_think_llm"] = "claude-sonnet-4-20250514"   # Use Sonnet for cost-efficiency; switch to Opus for complex analysis
-config["quick_think_llm"] = "claude-sonnet-4-20250514"
-config["anthropic_effort"] = "high"
+# LLM settings — Qwen Cloud (Alibaba Model Studio / DashScope)
+config["llm_provider"] = "qwen"
+config["deep_think_llm"] = "qwen3.6-plus"   # Plus tier for cost-efficiency; switch to qwen3-max for complex analysis
+config["quick_think_llm"] = "qwen3.5-flash"
 
 # Debate settings
 config["max_debate_rounds"] = 1
 config["max_risk_discuss_rounds"] = 1
 
-# Data vendors (yfinance for now, Kite API in Phase 4)
+# Data vendors (yfinance for now, Dhan API in Phase 4)
 config["data_vendors"] = {
     "core_stock_apis": "yfinance",
     "technical_indicators": "yfinance",

@@ -26,6 +26,13 @@ PROVIDER_ENV_KEYS = {
 
 # Provider display info
 PROVIDERS_INFO = {
+    "qwen": {
+        "name": "Qwen Cloud (Alibaba)",
+        "key_format": "sk-...",
+        "signup_url": "https://modelstudio.console.alibabacloud.com/apiKey",
+        "models_deep": ["qwen3.6-plus", "qwen3.5-plus", "qwen3-max"],
+        "models_quick": ["qwen3.5-flash", "qwen-plus"],
+    },
     "anthropic": {
         "name": "Anthropic Claude",
         "key_format": "sk-ant-...",
@@ -118,7 +125,7 @@ def test_api_key(provider: str, key: str | None = None) -> dict:
     """Test if an API key works. Makes a minimal call to verify.
 
     Args:
-        provider: anthropic | openai | google
+        provider: anthropic | qwen | openai | google
         key: optional — if provided, tests this key instead of saved one
     """
     # Use provided key or fall back to saved/env
@@ -140,6 +147,18 @@ def test_api_key(provider: str, key: str | None = None) -> dict:
                 messages=[{"role": "user", "content": "Say hi"}],
             )
             return {"ok": True, "model": "claude-haiku-4-5-20251001", "message": "API key works!"}
+
+        elif provider == "qwen":
+            from openai import OpenAI
+            from tradingagents.llm_clients.openai_client import _PROVIDER_CONFIG
+            base_url, _ = _PROVIDER_CONFIG["qwen"]
+            client = OpenAI(api_key=key, base_url=base_url)
+            resp = client.chat.completions.create(
+                model="qwen3.5-flash",
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Say hi"}],
+            )
+            return {"ok": True, "model": "qwen3.5-flash", "message": "API key works!"}
 
         elif provider == "openai":
             from openai import OpenAI

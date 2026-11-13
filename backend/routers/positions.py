@@ -1,10 +1,10 @@
-"""Manual positions and explicit Kite sync routes."""
+"""Manual positions and explicit Dhan sync routes."""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.brokers.kite import KiteAuthExpired, KiteConfigError
-from backend.positions import PositionsError, get_positions_view, remove_position, save_manual_position, sync_positions_from_kite, update_position_fields
+from backend.brokers.dhan import DhanAuthExpired, DhanConfigError
+from backend.positions import PositionsError, get_positions_view, remove_position, save_manual_position, sync_positions_from_dhan, update_position_fields
 
 router = APIRouter(prefix="/api/positions", tags=["positions"])
 
@@ -27,12 +27,12 @@ class PositionUpdateRequest(BaseModel):
     notes: str | None = None
 
 
-def _kite_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, KiteAuthExpired):
+def _dhan_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, DhanAuthExpired):
         return HTTPException(status_code=401, detail=str(exc))
-    if isinstance(exc, KiteConfigError):
+    if isinstance(exc, DhanConfigError):
         return HTTPException(status_code=400, detail=str(exc))
-    return HTTPException(status_code=502, detail="Kite sync failed")
+    return HTTPException(status_code=502, detail="Dhan sync failed")
 
 
 @router.get("")
@@ -43,9 +43,9 @@ def list_all():
 @router.post("/sync")
 def sync():
     try:
-        return sync_positions_from_kite()
+        return sync_positions_from_dhan()
     except Exception as exc:
-        raise _kite_error(exc)
+        raise _dhan_error(exc)
 
 
 @router.post("")

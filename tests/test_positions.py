@@ -11,7 +11,7 @@ def manual_position(symbol: str, exchange: str = "NSE", **overrides) -> dict:
         "quantity": 10,
         "average_price": 100,
         "last_price": 125,
-        "notes": "outside Kite",
+        "notes": "outside Dhan",
     }
     position.update(overrides)
     return position
@@ -57,10 +57,10 @@ class PositionsTests(IsolatedStateTestCase, unittest.TestCase):
             remaining = client.get("/api/positions").json()["positions"]
             self.assertEqual([(p["exchange"], p["quantity"]) for p in remaining], [("BSE", 7)])
 
-    def test_listing_positions_does_not_implicitly_fetch_kite(self):
+    def test_listing_positions_does_not_implicitly_fetch_dhan(self):
         with (
             fresh_test_client() as client,
-            patch("backend.brokers.kite.fetch_equity_holdings") as fetch,
+            patch("backend.brokers.dhan.fetch_equity_holdings") as fetch,
         ):
             login(client)
             response = client.get("/api/positions")
@@ -68,7 +68,7 @@ class PositionsTests(IsolatedStateTestCase, unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         fetch.assert_not_called()
 
-    def test_explicit_kite_sync_preserves_manual_rows_and_reconciles_kite_rows(self):
+    def test_explicit_dhan_sync_preserves_manual_rows_and_reconciles_dhan_rows(self):
         with fresh_test_client() as client:
             login(client)
             headers = csrf_headers(client)
@@ -91,10 +91,10 @@ class PositionsTests(IsolatedStateTestCase, unittest.TestCase):
                 "pnl_pct": 10,
                 "day_change": 1,
                 "day_change_pct": 0.9,
-                "source": "kite",
+                "source": "dhan",
             }]
             with patch(
-                "backend.brokers.kite.fetch_equity_holdings",
+                "backend.brokers.dhan.fetch_equity_holdings",
                 return_value=first_holdings,
             ) as fetch:
                 synced = client.post("/api/positions/sync", headers=headers)
@@ -112,7 +112,7 @@ class PositionsTests(IsolatedStateTestCase, unittest.TestCase):
                 "pnl_pct": 15,
             }]
             with patch(
-                "backend.brokers.kite.fetch_equity_holdings",
+                "backend.brokers.dhan.fetch_equity_holdings",
                 return_value=second_holdings,
             ):
                 synced_again = client.post("/api/positions/sync", headers=headers)
@@ -126,11 +126,11 @@ class PositionsTests(IsolatedStateTestCase, unittest.TestCase):
             }
             self.assertEqual(positions["MANUALONLY"]["source"], "manual")
             self.assertEqual(positions["MANUALONLY"]["notes"], "must survive sync")
-            self.assertEqual(positions["RELIANCE"]["source"], "kite")
+            self.assertEqual(positions["RELIANCE"]["source"], "dhan")
             self.assertEqual(positions["RELIANCE"]["last_price"], 115)
 
             with patch(
-                "backend.brokers.kite.fetch_equity_holdings",
+                "backend.brokers.dhan.fetch_equity_holdings",
                 return_value=None,
             ):
                 invalid_snapshot = client.post("/api/positions/sync", headers=headers)
@@ -145,7 +145,7 @@ class PositionsTests(IsolatedStateTestCase, unittest.TestCase):
     def test_invalid_manual_position_is_rejected_without_network_access(self):
         with (
             fresh_test_client() as client,
-            patch("backend.brokers.kite.fetch_equity_holdings") as fetch,
+            patch("backend.brokers.dhan.fetch_equity_holdings") as fetch,
         ):
             login(client)
             response = client.post(

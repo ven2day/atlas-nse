@@ -35,10 +35,11 @@ class IsolatedStateTestCase:
                 "TRADINGAGENTS_LOCAL_AUTH_SECRET",
                 "FRONTEND_URL",
                 "TRADINGAGENTS_FRONTEND_URL",
-                "KITE_API_KEY",
-                "KITE_API_SECRET",
-                "KITE_ACCESS_TOKEN",
-                "KITE_ACCESS_TOKEN_DATE",
+                "DHAN_CLIENT_ID",
+                "DHAN_API_KEY",
+                "DHAN_API_SECRET",
+                "DHAN_ACCESS_TOKEN",
+                "DHAN_ACCESS_TOKEN_DATE",
                 "CORS_ORIGINS",
             )
         }
@@ -46,10 +47,8 @@ class IsolatedStateTestCase:
         self.db_path = os.path.join(self.home.name, "trading_agent.db")
         os.environ["TRADINGAGENTS_HOME"] = self.home.name
         os.environ["TRADINGAGENTS_DB_PATH"] = self.db_path
-        os.environ.pop("KITE_API_KEY", None)
-        os.environ.pop("KITE_API_SECRET", None)
-        os.environ.pop("KITE_ACCESS_TOKEN", None)
-        os.environ.pop("KITE_ACCESS_TOKEN_DATE", None)
+        for key in ("DHAN_CLIENT_ID", "DHAN_API_KEY", "DHAN_API_SECRET", "DHAN_ACCESS_TOKEN", "DHAN_ACCESS_TOKEN_DATE"):
+            os.environ.pop(key, None)
 
         import backend.db as db
 

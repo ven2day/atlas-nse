@@ -2,21 +2,21 @@
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.brokers.kite import KiteAuthExpired, KiteConfigError, fetch_equity_holdings
+from backend.brokers.dhan import DhanAuthExpired, DhanConfigError, fetch_equity_holdings
 from backend.db import get_equity_portfolio_review, get_latest_equity_portfolio_review, list_equity_portfolio_reviews
 from backend.equity_portfolio import create_and_save_review
 from backend.positions import get_positions_view, positions_are_current
-from backend.notifications.telegram import TelegramConfigError, TelegramSendError, build_kite_login_reminder, build_portfolio_review_message, get_app_url, portfolio_keyboard, send_html_message_with_optional_buttons
+from backend.notifications.telegram import TelegramConfigError, TelegramSendError, build_dhan_login_reminder, build_portfolio_review_message, get_app_url, portfolio_keyboard, send_html_message_with_optional_buttons
 
 router = APIRouter(prefix="/api/equity-portfolio", tags=["equity-portfolio"])
 
 
-def _kite_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, KiteAuthExpired):
+def _dhan_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, DhanAuthExpired):
         return HTTPException(status_code=401, detail=str(exc))
-    if isinstance(exc, KiteConfigError):
+    if isinstance(exc, DhanConfigError):
         return HTTPException(status_code=400, detail=str(exc))
-    return HTTPException(status_code=502, detail="Kite operation failed")
+    return HTTPException(status_code=502, detail="Dhan operation failed")
 
 
 def _notification_error(exc: Exception) -> HTTPException:
@@ -28,13 +28,13 @@ def _notification_error(exc: Exception) -> HTTPException:
 
 
 def _positions_for_review() -> list[dict]:
-    """Read local positions only; Kite sync is exclusively an explicit action."""
+    """Read local positions only; Dhan sync is exclusively an explicit action."""
     view = get_positions_view()
     positions = view["positions"]
     if not positions:
-        raise KiteConfigError("No positions stored. Sync from Kite or add positions manually first.")
+        raise DhanConfigError("No positions stored. Sync from Dhan or add positions manually first.")
     if not positions_are_current(view):
-        raise KiteConfigError("Stored Kite positions are stale. Sync from Kite before running a review.")
+        raise DhanConfigError("Stored Dhan positions are stale. Sync from Dhan before running a review.")
     return positions
 
 
@@ -44,7 +44,7 @@ def holdings():
         data = fetch_equity_holdings()
         return {"holdings": data, "count": len(data)}
     except Exception as exc:
-        raise _kite_error(exc)
+        raise _dhan_error(exc)
 
 
 @router.post("/reviews")
@@ -52,7 +52,7 @@ def create_review():
     try:
         return create_and_save_review(_positions_for_review(), enrich=True)
     except Exception as exc:
-        raise _kite_error(exc)
+        raise _dhan_error(exc)
 
 
 @router.get("/reviews/latest")
@@ -92,20 +92,20 @@ def run_review_and_send_telegram():
     try:
         review = create_and_save_review(_positions_for_review(), enrich=True)
         return {"status": "review_sent", "review": review, "telegram": _send_review(review)}
-    except KiteAuthExpired:
+    except DhanAuthExpired:
         try:
             result = send_html_message_with_optional_buttons(
-                build_kite_login_reminder(), reply_markup=portfolio_keyboard()
+                build_dhan_login_reminder(), reply_markup=portfolio_keyboard()
             )
-            return {"status": "kite_login_required", "message": "Kite login is required for today.", "telegram": {"status": "sent", "message_id": result.get("result", {}).get("message_id")}}
+            return {"status": "dhan_login_required", "message": "Dhan login is required for today.", "telegram": {"status": "sent", "message_id": result.get("result", {}).get("message_id")}}
         except Exception as notify_exc:
             raise _notification_error(notify_exc)
-    except KiteConfigError as exc:
-        raise _kite_error(exc)
+    except DhanConfigError as exc:
+        raise _dhan_error(exc)
     except HTTPException:
         raise
     except Exception as exc:
-        raise _kite_error(exc)
+        raise _dhan_error(exc)
 
 
 @router.get("/reviews/{review_id}")

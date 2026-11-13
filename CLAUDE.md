@@ -25,7 +25,7 @@ pip install -e .
 
 # 2. Configure API keys (2 options)
 # Option A: via .env
-echo 'ANTHROPIC_API_KEY=your_key' > .env
+echo 'DASHSCOPE_API_KEY=your_key' > .env
 # Option B: via Settings page in the UI (stored in SQLite, takes priority)
 
 # 3. Start backend
@@ -249,9 +249,9 @@ Default config in `tradingagents/default_config.py`. Runtime overrides in SQLite
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `llm_provider` | `anthropic` | LLM provider (switch via Settings) |
-| `deep_think_llm` | `claude-sonnet-4-20250514` | Complex reasoning (2 agents) |
-| `quick_think_llm` | `claude-haiku-4-5-20251001` | Fast tasks (13 agents) |
+| `llm_provider` | `qwen` | LLM provider (switch via Settings) |
+| `deep_think_llm` | `qwen3.6-plus` | Complex reasoning (2 agents) |
+| `quick_think_llm` | `qwen3.5-flash` | Fast tasks (13 agents) |
 | `market` | `india` | Market region |
 | `default_exchange` | `NSE` | Default exchange |
 | `trading_style` | `short_term` | short_term / swing / positional |
@@ -537,30 +537,30 @@ Learning Insights updates with combined data
 - Headline card at TOP of Dashboard (between Market Status and FII/DII banner)
 - API: `GET /api/daily-verdict/`
 
-## Recently Added (Auth, Kite, Portfolio, Notifications)
+## Recently Added (Auth, Dhan, Portfolio, Notifications)
 
 Shipped after the initial feature set (see git history / PR #4):
 
 - **Browser authentication** (`backend/auth.py`, `backend/routers/auth.py`, `/login`) — single-user HMAC-signed session cookie (12h, revocable on logout), CSRF double-submit + Origin allowlist, WebSocket auth. **Optional for local** (open by default when no secret is set), **required + fail-closed for public** (`TRADINGAGENTS_AUTH_MODE=public`). Secret is env-only (`TRADINGAGENTS_LOCAL_AUTH_SECRET`, or `TRADINGAGENTS_AUTH_USERNAME`/`_PASSWORD`) — never stored in SQLite. Central `AuthMiddleware` wraps all `/api/*` HTTP + WS traffic in `app.py`.
-- **Zerodha Kite read-only integration** (`backend/brokers/kite.py`, `backend/routers/kite.py`) — OAuth login flow, daily access token, `holdings()` fetch, credential masking. **Read-only: no order placement, and no margin fetch yet.** `kiteconnect` dep, lazy-imported. Kite app **Redirect URL** must be the backend callback `http://localhost:8000/api/kite/callback` (exact match). The CSRF `state` is carried via Kite's `redirect_params` (URL-encoded) — Kite does **not** echo a bare top-level `state`, so passing it directly would fail every callback with `invalid_oauth_state` (issue #7).
+- **DhanHQ read-only integration** (`backend/brokers/dhan.py`, `backend/routers/dhan.py`) — three-step consent login flow, 24-hour access token, holdings + market-quote fetch, credential masking. Direct REST v2 over the pinned `requests` package; no SDK dependency. **Read-only: no order placement, and no margin fetch yet.** DhanHQ app **Redirect URL** must be the backend callback `http://localhost:8000/api/dhan/callback` (exact match; register it on web.dhan.co under My Profile > Access DhanHQ APIs). Quote-enriched holdings need a DhanHQ Data APIs subscription. Dhan does **not** echo an OAuth `state` on the redirect — the callback instead binds the login to this installation by rejecting any consumed session whose `dhanClientId` does not match the configured client ID.
 - **Equity portfolio analysis** (`backend/equity_portfolio.py`, `backend/routers/equity_portfolio.py`, `/equity-portfolio-analysis`) — P&L, actions, sector allocation, concentration warnings, winners/losers, persisted review history.
-- **Local positions tracking** (`backend/positions.py`, `backend/routers/positions.py`) — manual exchange-aware CRUD + explicit, manual-preserving Kite sync; feeds concentration checks.
+- **Local positions tracking** (`backend/positions.py`, `backend/routers/positions.py`) — manual exchange-aware CRUD + explicit, manual-preserving Dhan sync; feeds concentration checks. Legacy Kite rows/settings are migrated to the `dhan` source label on first `ensure_db()` run.
 - **Telegram notifications** (`backend/notifications/telegram.py`, `backend/routers/telegram.py`) — test + portfolio-review alerts with safe local-URL button fallback.
 - **Dark mode** — light/dark/system theme via `next-themes` (`ThemeToggle`, status tokens in `lib/status-colors.ts`).
 - **Ollama local LLM provider** — added to `PROVIDERS_INFO` (no API key/cost); `GET /api/settings/ollama/models` live-fetches installed models from `localhost:11434`.
 - **Yahoo-powered ticker search** — `GET /api/market-data/search` now uses `yfinance`'s `Search` (always current, NSE-filtered). `stock_list.py` is only a small curated offline fallback; **no NSE data bundled or fetched**.
 - **Security hardening** (full-repo audit) — `normalize_ticker` rejects path-like symbols (`InvalidTickerError` → HTTP 400) and `safe_path_component` guards every ticker-derived path; RSS feeds are fetched by `news_sources._fetch_feed` (public http(s) only, re-checked per redirect, bytes handed to feedparser as a stream); open mode (no auth secret) only accepts loopback Host headers + allowed/same Origin (`TRADINGAGENTS_ALLOWED_HOSTS` to extend); AI backtests capped at 60 dates (`TRADINGAGENTS_MAX_BACKTEST_DATES`) and one at a time; `~/.tradingagents` 0700 / DB 0600; CLI upstream announcements opt-in (`TRADINGAGENTS_CLI_ANNOUNCEMENTS=1`). Pinned deps in `requirements.txt`.
-- **Test suite** (`tests/`) — 77 `unittest` cases (auth/CSRF/OAuth-replay/WS-origin, security hardening, equity portfolio, positions, Telegram). Run: `python -m unittest discover -s tests`.
+- **Test suite** (`tests/`) — 76 `unittest` cases (auth/CSRF/consent-callback/WS-origin, security hardening, equity portfolio, positions, Telegram). Run: `python -m unittest discover -s tests`.
 - **CI + contribution rules** — `.github/workflows/tests.yml` runs the backend tests and the frontend typecheck + build on every push to `main` and every PR (read-only token, `npm ci --ignore-scripts`, Actions pinned to commit SHAs and updated weekly via `.github/dependabot.yml`). CodeQL code scanning (default setup) checks every PR. `main` is protected by the "Protect main" ruleset (both checks required for PRs; the owner can bypass for direct commits). `.github/CODEOWNERS` auto-requests the maintainer's review on every PR. Contributor workflow: `CONTRIBUTING.md` (one change per PR, from a feature branch); vulnerability reports: `SECURITY.md`.
 - **Leaner frontend dependencies** — the `shadcn` CLI is no longer a dependency (it pulled in ~250 packages, including `hono` from Dependabot alert #53). Its theme helpers are vendored in `frontend/src/app/shadcn-tailwind.css` (byte-identical to shadcn@4.2.0, MIT notice included); add components with `npx shadcn@latest add <name>`.
 
 ## Remaining Phases (Unimplemented)
 
-### Pre-Kite Hardening
+### Pre-Broker Hardening
 - ✅ Sector concentration checker — prevents over-exposure to single sector
 - ✅ Daily Verdict synthesizer — single trade-or-skip decision
-- ✅ **Phase 4a: Kite read-only sync** — live portfolio/holdings (order-free). ⚠️ Margin visibility still pending.
-- **Phase 4b: Kite order placement** — one-click bracket orders with safety checks (NOT implemented; Kite stays read-only)
+- ✅ **Phase 4a: Dhan read-only sync** — live portfolio/holdings (order-free). ⚠️ Margin visibility still pending.
+- **Phase 4b: Dhan order placement** — one-click bracket orders with safety checks (NOT implemented; Dhan stays read-only)
 
 ### Future Big Features
 - **Options/Futures Phase 3** — Derivatives analyst, option chains, Greeks, PCR, lot sizes

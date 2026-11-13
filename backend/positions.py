@@ -1,11 +1,11 @@
-"""Local position tracking with explicit, read-only Kite synchronization."""
+"""Local position tracking with explicit, read-only Dhan synchronization."""
 
 from datetime import datetime, timezone
 from datetime import date
 from threading import Lock
 from typing import Any
 
-from backend.db import delete_position, get_position, get_setting, list_positions, replace_kite_positions, set_setting, upsert_position
+from backend.db import delete_position, get_position, get_setting, list_positions, replace_dhan_positions, set_setting, upsert_position
 
 POSITIONS_LAST_SYNC = "positions_last_sync_at"
 _SYNC_LOCK = Lock()
@@ -33,7 +33,7 @@ def _derived(quantity: float, average_price: float, last_price: float) -> dict:
 
 
 def get_positions_view() -> dict:
-    """Return only local state; this function never contacts Kite."""
+    """Return only local state; this function never contacts Dhan."""
     positions = list_positions()
     total_invested = round(sum(_num(row.get("invested_value")) for row in positions), 2)
     total_current = round(sum(_num(row.get("current_value")) for row in positions), 2)
@@ -42,10 +42,10 @@ def get_positions_view() -> dict:
     enriched = [{**row, "allocation_pct": round(_num(row.get("current_value")) / total_current * 100, 2)
                  if total_current else 0.0} for row in positions]
     manual_count = sum(row.get("source") == "manual" for row in positions)
-    kite_count = sum(row.get("source") == "kite" for row in positions)
+    dhan_count = sum(row.get("source") == "dhan" for row in positions)
     return {
         "positions": enriched, "count": len(enriched), "last_sync": get_setting(POSITIONS_LAST_SYNC),
-        "source_mode": "manual" if manual_count and not kite_count else "kite" if kite_count and not manual_count
+        "source_mode": "manual" if manual_count and not dhan_count else "dhan" if dhan_count and not manual_count
         else "mixed" if positions else "empty",
         "summary": {
             "total_positions": len(enriched), "total_invested": total_invested,
@@ -54,29 +54,29 @@ def get_positions_view() -> dict:
             "total_day_pnl": total_day_pnl,
             "day_pnl_pct": round(total_day_pnl / (total_current - total_day_pnl) * 100, 2)
             if total_current - total_day_pnl else 0.0,
-            "manual_count": manual_count, "kite_count": kite_count,
+            "manual_count": manual_count, "dhan_count": dhan_count,
         },
     }
 
 
-def sync_positions_from_kite() -> dict:
-    """Fetch and apply a Kite snapshot only when this endpoint is called."""
-    from backend.brokers.kite import fetch_equity_holdings
+def sync_positions_from_dhan() -> dict:
+    """Fetch and apply a Dhan snapshot only when this endpoint is called."""
+    from backend.brokers.dhan import fetch_equity_holdings
     # Fetch and apply as one process-local critical section so an older,
     # slower broker response cannot overwrite a newer snapshot last.
     with _SYNC_LOCK:
         holdings = fetch_equity_holdings()
         if not isinstance(holdings, list):
-            raise PositionsError("Kite returned an invalid holdings snapshot")
-        counts = replace_kite_positions(holdings)
+            raise PositionsError("Dhan returned an invalid holdings snapshot")
+        counts = replace_dhan_positions(holdings)
         synced_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         set_setting(POSITIONS_LAST_SYNC, synced_at)
         return {"status": "synced", "synced_at": synced_at, **counts, "summary": get_positions_view()["summary"]}
 
 
 def positions_are_current(view: dict) -> bool:
-    """Return whether Kite-backed rows were synced during the current day."""
-    if not view.get("summary", {}).get("kite_count"):
+    """Return whether Dhan-backed rows were synced during the current day."""
+    if not view.get("summary", {}).get("dhan_count"):
         return True
     return str(view.get("last_sync") or "")[:10] == date.today().isoformat()
 

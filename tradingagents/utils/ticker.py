@@ -91,7 +91,7 @@ def is_index(symbol: str) -> bool:
 
 
 def strip_suffix(symbol: str) -> str:
-    """Remove exchange suffix from a ticker. Useful for display or Kite API lookups."""
+    """Remove exchange suffix from a ticker. Useful for display or Dhan API lookups."""
     for suffix in EXCHANGE_SUFFIXES.values():
         if symbol.endswith(suffix):
             return symbol[: -len(suffix)]

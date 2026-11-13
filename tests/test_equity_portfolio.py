@@ -8,91 +8,115 @@ from tests._support import IsolatedStateTestCase, csrf_headers, fresh_test_clien
 
 class EquityPortfolioTests(IsolatedStateTestCase, unittest.TestCase):
     def test_normalize_holdings_computes_values_and_pnl(self):
-        from backend.brokers.kite import normalize_holdings
+        from backend.brokers.dhan import normalize_holdings
 
         rows = normalize_holdings([
             {
-                "tradingsymbol": "RELIANCE",
-                "exchange": "NSE",
-                "quantity": 10,
-                "average_price": 100,
-                "last_price": 125,
-                "day_change": 2,
+                "tradingSymbol": "RELIANCE",
+                "exchange": "NSE_EQ",
+                "securityId": "2885",
+                "isin": "INE002A01018",
+                "totalQty": 10,
+                "avgCostPrice": 100,
             }
-        ])
+        ], quotes={("NSE_EQ", "2885"): {"last_price": 125, "close": 123}})
 
         self.assertEqual(rows[0]["tradingsymbol"], "RELIANCE")
+        self.assertEqual(rows[0]["exchange"], "NSE")
         self.assertEqual(rows[0]["invested_value"], 1000)
         self.assertEqual(rows[0]["current_value"], 1250)
         self.assertEqual(rows[0]["pnl"], 250)
         self.assertEqual(rows[0]["pnl_pct"], 25)
+        self.assertEqual(rows[0]["close_price"], 123)
+        self.assertEqual(rows[0]["day_change"], 2)
 
-    def test_kite_status_masks_credentials_and_expires_old_token(self):
-        from backend.brokers.kite import get_kite_status
+    def test_normalize_holdings_falls_back_to_cost_without_quotes(self):
+        from backend.brokers.dhan import normalize_holdings
 
-        self.db.set_setting("kite_api_key", "abcd1234wxyz")
-        self.db.set_setting("kite_api_secret", "secret1234")
-        self.db.set_setting("kite_access_token", "token123")
+        rows = normalize_holdings([{
+            "tradingSymbol": "RELIANCE",
+            "exchange": "NSE",
+            "totalQty": 10,
+            "avgCostPrice": 100,
+        }])
+
+        self.assertEqual(rows[0]["last_price"], 100)
+        self.assertEqual(rows[0]["current_value"], 1000)
+        self.assertEqual(rows[0]["pnl"], 0)
+        self.assertEqual(rows[0]["day_change"], 0)
+
+    def test_dhan_status_masks_credentials_and_expires_old_token(self):
+        from backend.brokers.dhan import get_dhan_status
+
+        self.db.set_setting("dhan_client_id", "1100123456")
+        self.db.set_setting("dhan_api_key", "abcd1234wxyz")
+        self.db.set_setting("dhan_api_secret", "secret1234")
+        self.db.set_setting("dhan_access_token", "token123")
         self.db.set_setting(
-            "kite_access_token_date",
+            "dhan_access_token_date",
             (date.today() - timedelta(days=1)).isoformat(),
         )
 
-        status = get_kite_status()
+        status = get_dhan_status()
 
         self.assertTrue(status["configured"])
         self.assertFalse(status["connected_today"])
         self.assertEqual(status["masked_api_key"], "abcd...wxyz")
+        self.assertEqual(status["masked_client_id"], "1100...3456")
         self.assertNotIn("secret1234", str(status))
         self.assertNotIn("token123", str(status))
 
-    def test_kite_credentials_can_be_read_from_environment(self):
-        from backend.brokers.kite import get_kite_status
+    def test_dhan_credentials_can_be_read_from_environment(self):
+        from backend.brokers.dhan import get_dhan_status
 
-        with patch.dict(os.environ, {"KITE_API_KEY": "env-key", "KITE_API_SECRET": "env-secret"}):
-            status = get_kite_status()
+        with patch.dict(os.environ, {
+            "DHAN_CLIENT_ID": "env-client",
+            "DHAN_API_KEY": "env-key",
+            "DHAN_API_SECRET": "env-secret",
+        }):
+            status = get_dhan_status()
 
         self.assertTrue(status["configured"])
         self.assertEqual(status["masked_api_key"], "****")
 
-    def test_kite_access_token_can_be_read_from_environment_for_today(self):
-        from backend.brokers.kite import get_kite_status
+    def test_dhan_access_token_can_be_read_from_environment_for_today(self):
+        from backend.brokers.dhan import get_dhan_status
 
         with patch.dict(os.environ, {
-            "KITE_API_KEY": "env-key",
-            "KITE_API_SECRET": "env-secret",
-            "KITE_ACCESS_TOKEN": "env-token",
+            "DHAN_CLIENT_ID": "env-client",
+            "DHAN_API_KEY": "env-key",
+            "DHAN_API_SECRET": "env-secret",
+            "DHAN_ACCESS_TOKEN": "env-token",
         }):
-            status = get_kite_status()
+            status = get_dhan_status()
 
         self.assertTrue(status["configured"])
         self.assertTrue(status["connected_today"])
         self.assertEqual(status["token_date"], date.today().isoformat())
 
-    def test_invalid_kite_snapshot_is_rejected_before_normalization(self):
-        from backend.brokers.kite import KiteConfigError, normalize_holdings
+    def test_invalid_dhan_snapshot_is_rejected_before_normalization(self):
+        from backend.brokers.dhan import DhanConfigError, normalize_holdings
 
-        with self.assertRaises(KiteConfigError):
+        with self.assertRaises(DhanConfigError):
             normalize_holdings(None)
-        with self.assertRaises(KiteConfigError):
-            normalize_holdings([{"tradingsymbol": "RELIANCE", "quantity": 1}])
-        with self.assertRaises(KiteConfigError):
+        with self.assertRaises(DhanConfigError):
+            normalize_holdings([{"tradingSymbol": "RELIANCE", "totalQty": 1}])
+        with self.assertRaises(DhanConfigError):
             normalize_holdings([
-                {"tradingsymbol": "RELIANCE", "quantity": 1, "average_price": 100, "last_price": 110},
-                {"tradingsymbol": "RELIANCE", "quantity": 1, "average_price": 100, "last_price": 110},
+                {"tradingSymbol": "RELIANCE", "exchange": "NSE", "totalQty": 1, "avgCostPrice": 100},
+                {"tradingSymbol": "RELIANCE", "exchange": "NSE", "totalQty": 1, "avgCostPrice": 100},
             ])
 
-    def test_review_rejects_stale_kite_positions_before_analysis(self):
-        from backend.brokers.kite import normalize_holdings
+    def test_review_rejects_stale_dhan_positions_before_analysis(self):
+        from backend.brokers.dhan import normalize_holdings
 
         holding = normalize_holdings([{
-            "tradingsymbol": "RELIANCE",
+            "tradingSymbol": "RELIANCE",
             "exchange": "NSE",
-            "quantity": 10,
-            "average_price": 100,
-            "last_price": 125,
+            "totalQty": 10,
+            "avgCostPrice": 100,
         }])[0]
-        self.db.upsert_position({**holding, "source": "kite"})
+        self.db.upsert_position({**holding, "source": "dhan"})
         self.db.set_setting(
             "positions_last_sync_at",
             (date.today() - timedelta(days=1)).isoformat(),
@@ -179,7 +203,7 @@ class EquityPortfolioTests(IsolatedStateTestCase, unittest.TestCase):
         self.assertNotEqual(first["review_id"], second["review_id"])
         self.assertEqual(self.db.get_latest_equity_portfolio_review()["review_id"], second["review_id"])
 
-    def test_review_route_uses_mocked_kite_and_recommender_boundaries(self):
+    def test_review_route_uses_mocked_dhan_and_recommender_boundaries(self):
         holdings = [{
             "tradingsymbol": "RELIANCE",
             "exchange": "NSE",

@@ -30,7 +30,7 @@ DB_PATH = get_db_path()
 def _restrict_permissions(db_path: str) -> None:
     """Keep the state directory and DB private to the current OS user.
 
-    The DB stores LLM API keys and Kite/Telegram credentials in plain text, so
+    The DB stores LLM API keys and Dhan/Telegram credentials in plain text, so
     other accounts on the machine must not be able to read it. The directory is
     only tightened when it is the app's own default home; a custom
     TRADINGAGENTS_HOME is left as the operator configured it.
@@ -125,7 +125,7 @@ def ensure_db():
             );
 
             -- Equity portfolio reviews are snapshots of explicitly selected
-            -- local positions or a read-only Kite holdings fetch.
+            -- local positions or a read-only Dhan holdings fetch.
             CREATE TABLE IF NOT EXISTS equity_portfolio_reviews (
                 review_id TEXT PRIMARY KEY,
                 review_date TEXT NOT NULL,
@@ -137,8 +137,8 @@ def ensure_db():
                 updated_at TEXT DEFAULT (datetime('now'))
             );
 
-            -- Manual and explicitly synced Kite positions share a symbol and
-            -- exchange key. A Kite sync never replaces a manual row.
+            -- Manual and explicitly synced Dhan positions share a symbol and
+            -- exchange key. A Dhan sync never replaces a manual row.
             CREATE TABLE IF NOT EXISTS positions (
                 tradingsymbol TEXT NOT NULL,
                 exchange TEXT NOT NULL DEFAULT 'NSE',
@@ -265,6 +265,15 @@ def ensure_db():
                 created_at TEXT DEFAULT (datetime('now'))
             );
         """)
+        # Migrate the retired Zerodha Kite integration to Dhan: synced rows
+        # keep their identity under the new source label, and dead Kite
+        # credentials/tokens (daily, always expired) are dropped. Idempotent.
+        conn.execute("UPDATE positions SET source = 'dhan' WHERE source = 'kite'")
+        conn.execute(
+            "DELETE FROM settings WHERE key IN (?, ?, ?, ?, ?, ?)",
+            ("kite_api_key", "kite_api_secret", "kite_access_token",
+             "kite_access_token_date", "kite_profile", "kite_oauth_state"),
+        )
 
 
 @contextmanager
@@ -462,7 +471,7 @@ def get_all_settings() -> dict:
         return {r["key"]: r["value"] for r in rows}
 
 
-# --- Local positions (manual or explicitly synced from Kite) ---
+# --- Local positions (manual or explicitly synced from Dhan) ---
 
 def list_positions(source: str | None = None) -> list[dict]:
     with get_db() as conn:
@@ -534,29 +543,29 @@ def upsert_position(data: dict):
         _upsert_position_conn(conn, data)
 
 
-def replace_kite_positions(rows: list[dict]) -> dict:
-    """Apply one explicit Kite snapshot without deleting manual positions.
+def replace_dhan_positions(rows: list[dict]) -> dict:
+    """Apply one explicit Dhan snapshot without deleting manual positions.
 
     Identity includes both symbol and exchange. If a manual row already owns
-    the same identity, it is deliberately preserved and the Kite row is
+    the same identity, it is deliberately preserved and the Dhan row is
     counted as skipped because this schema has one row per symbol/exchange.
-    Kite rows absent from the new snapshot are removed only for identities
-    previously sourced from Kite.
+    Dhan rows absent from the new snapshot are removed only for identities
+    previously sourced from Dhan.
     """
     if not isinstance(rows, list):
-        raise ValueError("Kite holdings snapshot must be a list")
+        raise ValueError("Dhan holdings snapshot must be a list")
     incoming: dict[tuple[str, str], dict] = {}
     for row in rows:
         if not isinstance(row, dict):
-            raise ValueError("Kite holdings snapshot contains an invalid row")
+            raise ValueError("Dhan holdings snapshot contains an invalid row")
         raw_symbol = row.get("tradingsymbol") or row.get("ticker")
         raw_exchange = row.get("exchange") or "NSE"
         if not isinstance(raw_symbol, str) or not isinstance(raw_exchange, str):
-            raise ValueError("Kite holdings snapshot contains an invalid symbol or exchange")
+            raise ValueError("Dhan holdings snapshot contains an invalid symbol or exchange")
         symbol = raw_symbol.strip().upper()
         exchange = raw_exchange.strip().upper()
         if not symbol or not exchange or (symbol, exchange) in incoming:
-            raise ValueError("Kite holdings snapshot contains a duplicate or empty identity")
+            raise ValueError("Dhan holdings snapshot contains a duplicate or empty identity")
         incoming[(symbol, exchange)] = row
 
     ensure_db()
@@ -566,23 +575,23 @@ def replace_kite_positions(rows: list[dict]) -> dict:
             (row["tradingsymbol"].upper(), row["exchange"].upper())
             for row in conn.execute("SELECT tradingsymbol, exchange FROM positions WHERE source = 'manual'")
         }
-        kite_keys = {
+        dhan_keys = {
             (row["tradingsymbol"].upper(), row["exchange"].upper())
-            for row in conn.execute("SELECT tradingsymbol, exchange FROM positions WHERE source = 'kite'")
+            for row in conn.execute("SELECT tradingsymbol, exchange FROM positions WHERE source = 'dhan'")
         }
         applied_keys = set(incoming) - manual_keys
         for key in applied_keys:
-            _upsert_position_conn(conn, {**incoming[key], "source": "kite"})
-        stale_keys = kite_keys - applied_keys
+            _upsert_position_conn(conn, {**incoming[key], "source": "dhan"})
+        stale_keys = dhan_keys - applied_keys
         for symbol, exchange in stale_keys:
             conn.execute(
-                "DELETE FROM positions WHERE source = 'kite' AND tradingsymbol = ? AND exchange = ?",
+                "DELETE FROM positions WHERE source = 'dhan' AND tradingsymbol = ? AND exchange = ?",
                 (symbol, exchange),
             )
 
     return {
-        "added": len(applied_keys - kite_keys),
-        "updated": len(applied_keys & kite_keys),
+        "added": len(applied_keys - dhan_keys),
+        "updated": len(applied_keys & dhan_keys),
         "removed": len(stale_keys),
         "skipped_manual": len(set(incoming) & manual_keys),
         "total": len(incoming),

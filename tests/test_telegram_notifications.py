@@ -70,7 +70,7 @@ class TelegramNotificationTests(IsolatedStateTestCase, unittest.TestCase):
             },
             "insights": {
                 "portfolio_status": "EMPTY",
-                "plain_summary": "No equity holdings found in Kite.",
+                "plain_summary": "No equity holdings found in Dhan.",
             },
             "model_metadata": {"mode": "test"},
         }
@@ -93,7 +93,7 @@ class TelegramNotificationTests(IsolatedStateTestCase, unittest.TestCase):
         self.assertEqual(response.json()["review_id"], "abc123")
         self.assertEqual(response.json()["message_id"], 42)
 
-    def test_kite_login_reminder_route_sends_button_message_without_external_call(self):
+    def test_dhan_login_reminder_route_sends_button_message_without_external_call(self):
         with (
             fresh_test_client() as client,
             patch(
@@ -103,7 +103,7 @@ class TelegramNotificationTests(IsolatedStateTestCase, unittest.TestCase):
         ):
             login(client)
             response = client.post(
-                "/api/telegram/kite-login-reminder",
+                "/api/telegram/dhan-login-reminder",
                 headers=csrf_headers(client),
             )
 

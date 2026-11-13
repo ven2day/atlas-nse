@@ -16,7 +16,7 @@ Thanks for helping improve the Indian Market Trading Agent! This guide keeps con
 2. Start **every change on a new branch from the latest `main`**:
    ```bash
    git fetch upstream
-   git checkout -b fix/kite-login upstream/main
+   git checkout -b fix/dhan-login upstream/main
    ```
    Never work on your fork's `main`: a pull request opened from it picks up everything you push there later.
 3. Keep each pull request to **one change**: one bug fix or one feature. Small PRs get reviewed quickly; big mixed ones get sent back.

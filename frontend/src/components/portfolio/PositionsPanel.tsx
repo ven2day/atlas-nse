@@ -58,7 +58,7 @@ type PositionsSummary = {
   total_day_pnl: number;
   day_pnl_pct: number;
   manual_count: number;
-  kite_count: number;
+  dhan_count: number;
 };
 
 type PositionsView = {
@@ -114,8 +114,8 @@ const emptyForm: FormState = {
   notes: "",
 };
 
-export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
-  kiteConnected: boolean;
+export function PositionsPanel({ dhanConnected, onPositionCountChange }: {
+  dhanConnected: boolean;
   onPositionCountChange?: (count: number) => void;
 }) {
   const [view, setView] = useState<PositionsView | null>(null);
@@ -155,12 +155,12 @@ export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
         skipped_manual?: number;
       };
       toast.success(
-        `Synced from Kite — ${result.added} added, ${result.updated} updated, ${result.removed} removed` +
+        `Synced from Dhan — ${result.added} added, ${result.updated} updated, ${result.removed} removed` +
         (result.skipped_manual ? `; ${result.skipped_manual} manual position(s) preserved` : "")
       );
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Kite sync failed");
+      toast.error(e instanceof Error ? e.message : "Dhan sync failed");
     } finally {
       setSyncing(false);
     }
@@ -268,20 +268,20 @@ export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
           <Button variant="outline" size="sm" onClick={openAdd}>
             <Plus className="h-3 w-3 mr-1" /> Add Position
           </Button>
-          <Button size="sm" onClick={handleSync} disabled={!kiteConnected || syncing}>
+          <Button size="sm" onClick={handleSync} disabled={!dhanConnected || syncing}>
             {syncing ? (
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             ) : (
               <RefreshCw className="h-3 w-3 mr-1" />
             )}
-            Sync from Kite
+            Sync from Dhan
           </Button>
         </div>
       </div>
 
-      {!kiteConnected && (
+      {!dhanConnected && (
         <p className="text-xs text-muted-foreground">
-          Kite is not connected for today — sync is disabled, but your stored positions remain available below.
+          Dhan is not connected for today — sync is disabled, but your stored positions remain available below.
         </p>
       )}
 
@@ -292,7 +292,7 @@ export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
               <p className="text-xs text-muted-foreground">Current Value</p>
               <p className="text-2xl font-bold">{money(summary.total_current)}</p>
               <p className="text-xs text-muted-foreground">
-                {summary.total_positions} positions ({summary.kite_count} kite, {summary.manual_count} manual)
+                {summary.total_positions} positions ({summary.dhan_count} dhan, {summary.manual_count} manual)
               </p>
             </CardContent>
           </Card>
@@ -341,7 +341,7 @@ export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
                     No positions stored yet.
-                    {kiteConnected ? " Sync from Kite to import your holdings." : " Add one manually or connect Kite to sync."}
+                    {dhanConnected ? " Sync from Dhan to import your holdings." : " Add one manually or connect Dhan to sync."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -351,9 +351,9 @@ export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={p.source === "kite" ? statusColors.info : statusColors.neutral}
+                        className={p.source === "dhan" ? statusColors.info : statusColors.neutral}
                       >
-                        {p.source === "kite" ? "KITE" : "MANUAL"}
+                        {p.source === "dhan" ? "DHAN" : "MANUAL"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">{p.quantity}</TableCell>
@@ -403,7 +403,7 @@ export function PositionsPanel({ kiteConnected, onPositionCountChange }: {
             <DialogDescription>
               {editing
                 ? "Update quantity, average price, last price, or notes."
-                : "Track a position manually. It will not be affected by Kite sync."}
+                : "Track a position manually. It will not be affected by Dhan sync."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

@@ -167,12 +167,12 @@ export const login = (credentials: LoginCredentials | string) =>
 export const logout = () => fetchAPI(`/api/auth/logout`, { method: "POST" });
 export const getAuthStatus = () => fetchAPI<AuthStatus>(`/api/auth/status`);
 
-// Kite + Equity Portfolio Analysis
-export const getKiteStatus = () => fetchAPI(`/api/kite/status`);
-export const saveKiteCredentials = (data: { api_key: string; api_secret: string }) =>
-  fetchAPI(`/api/kite/credentials`, { method: "PUT", body: JSON.stringify(data) });
-export const getKiteLoginUrl = () => fetchAPI(`/api/kite/login-url`);
-export const logoutKite = () => fetchAPI(`/api/kite/logout`, { method: "POST" });
+// Dhan + Equity Portfolio Analysis
+export const getDhanStatus = () => fetchAPI(`/api/dhan/status`);
+export const saveDhanCredentials = (data: { client_id: string; api_key: string; api_secret: string }) =>
+  fetchAPI(`/api/dhan/credentials`, { method: "PUT", body: JSON.stringify(data) });
+export const getDhanLoginUrl = () => fetchAPI(`/api/dhan/login-url`);
+export const logoutDhan = () => fetchAPI(`/api/dhan/logout`, { method: "POST" });
 export const getEquityHoldings = () => fetchAPI(`/api/equity-portfolio/holdings`);
 export const runEquityPortfolioReview = () =>
   fetchAPI(`/api/equity-portfolio/reviews`, { method: "POST" });
@@ -193,7 +193,7 @@ export const deleteTelegramSettings = () => fetchAPI(`/api/telegram/settings`, {
 export const sendTelegramTest = (text?: string) =>
   fetchAPI(`/api/telegram/test`, { method: "POST", body: JSON.stringify({ text: text || null }) });
 
-// Positions (local store, synced from Kite on demand)
+// Positions (local store, synced from Dhan on demand)
 export const getPositions = () => fetchAPI(`/api/positions`);
 export const syncPositions = () => fetchAPI(`/api/positions/sync`, { method: "POST" });
 export const addPosition = (data: {

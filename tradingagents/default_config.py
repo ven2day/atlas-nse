@@ -7,9 +7,9 @@ DEFAULT_CONFIG = {
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
     # LLM settings
-    "llm_provider": "anthropic",
-    "deep_think_llm": "claude-sonnet-4-20250514",
-    "quick_think_llm": "claude-haiku-4-5-20251001",
+    "llm_provider": "qwen",
+    "deep_think_llm": "qwen3.6-plus",
+    "quick_think_llm": "qwen3.5-flash",
     # Provider-specific thinking configuration
     "google_thinking_level": None,
     "openai_reasoning_effort": None,
@@ -49,10 +49,11 @@ DEFAULT_CONFIG = {
         "FII DII activity Indian markets",
         "India rupee forex exchange rate",
     ],
-    # === Kite API Settings (Phase 4) ===
-    "kite_api_key": None,
-    "kite_api_secret": None,
-    "kite_access_token": None,
+    # === Dhan API Settings (Phase 4) ===
+    "dhan_client_id": None,
+    "dhan_api_key": None,
+    "dhan_api_secret": None,
+    "dhan_access_token": None,
     # === Order Management Safety (Phase 4) ===
     "order_execution_enabled": False,
     "dry_run": True,

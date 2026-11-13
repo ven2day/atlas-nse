@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.notifications.telegram import TelegramConfigError, TelegramSendError, build_kite_login_reminder, clear_telegram_settings, get_telegram_status, portfolio_keyboard, save_telegram_settings, send_html_message_with_optional_buttons, send_message
+from backend.notifications.telegram import TelegramConfigError, TelegramSendError, build_dhan_login_reminder, clear_telegram_settings, get_telegram_status, portfolio_keyboard, save_telegram_settings, send_html_message_with_optional_buttons, send_message
 
 router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
@@ -53,11 +53,11 @@ def test_message(data: TelegramTestMessage | None = None):
         raise _error(exc)
 
 
-@router.post("/kite-login-reminder")
-def kite_login_reminder():
+@router.post("/dhan-login-reminder")
+def dhan_login_reminder():
     try:
         result = send_html_message_with_optional_buttons(
-            build_kite_login_reminder(), reply_markup=portfolio_keyboard()
+            build_dhan_login_reminder(), reply_markup=portfolio_keyboard()
         )
         return {"status": "sent", "message_id": result.get("result", {}).get("message_id")}
     except Exception as exc:

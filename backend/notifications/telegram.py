@@ -72,7 +72,7 @@ def portfolio_keyboard(app_url: str | None = None) -> dict:
     url = app_url or get_app_url()
     return {"inline_keyboard": [
         [{"text": "Open portfolio page", "url": url}],
-        [{"text": "Connect Kite for today", "url": url}],
+        [{"text": "Connect Dhan for today", "url": url}],
     ]}
 
 
@@ -126,11 +126,11 @@ def send_html_message_with_optional_buttons(text: str, reply_markup: dict | None
         raise
 
 
-def build_kite_login_reminder(app_url: str | None = None) -> str:
+def build_dhan_login_reminder(app_url: str | None = None) -> str:
     url = app_url or get_app_url()
     return "\n".join([
-        "<b>Kite login required</b>", "", "Your daily Kite session is not active yet.",
-        "Open the portfolio page, complete Kite login, then the scheduled review can fetch holdings.",
+        "<b>Dhan login required</b>", "", "Your daily Dhan session is not active yet.",
+        "Open the portfolio page, complete Dhan login, then the scheduled review can fetch holdings.",
         "", f'<a href="{html.escape(url, quote=True)}">Open Equity Portfolio Analysis</a>',
     ])
 

@@ -101,7 +101,7 @@ VALIDATE
 ### Prerequisites
 - **Python 3.11+** (tested on 3.14)
 - **Node.js 20+**
-- An LLM API key (Anthropic/OpenAI/Google — Anthropic Haiku is the cheapest default)
+- An LLM API key (Qwen Cloud is the default — or Anthropic/OpenAI/Google)
 
 ### 1. Clone and install Python deps
 
@@ -128,7 +128,7 @@ Keys are stored in your local SQLite DB (`~/.tradingagents/trading_agent.db`).
 ```bash
 cp .env.example .env
 # Edit .env and add your key:
-#   ANTHROPIC_API_KEY=sk-ant-api03-...
+#   DASHSCOPE_API_KEY=sk-...
 ```
 
 ### 3. Configure browser authentication (optional locally)
@@ -142,7 +142,7 @@ that value as the password/secret. You may instead configure both
 Before exposing the app publicly, set `TRADINGAGENTS_AUTH_MODE=public`,
 `FRONTEND_URL` to the exact HTTPS frontend origin, and an explicit username and
 password. Public/production mode always requires authentication and fails
-closed when those credentials or the frontend URL are missing. The Kite
+closed when those credentials or the frontend URL are missing. The Dhan
 integration is read-only and order execution is not exposed by this
 application.
 
@@ -177,27 +177,30 @@ cd frontend && npm install && npm run dev
 ```
 </details>
 
-### 5. Connect your Zerodha Kite portfolio (optional, read-only)
+### 5. Connect your Dhan portfolio (optional, read-only)
 
-The Kite integration pulls your **holdings** for portfolio analysis. It is
+The DhanHQ integration pulls your **holdings** for portfolio analysis. It is
 strictly read-only — no orders, no fund transfers.
 
-1. Create a Kite Connect app at [developers.kite.trade](https://developers.kite.trade/apps).
-2. Set the app's **Redirect URL** to the **backend** callback (not the frontend):
+1. Log in to [web.dhan.co](https://web.dhan.co), open **My Profile →
+   Access DhanHQ APIs**, and create an API key app. Set the app's **Redirect
+   URL** to the **backend** callback (not the frontend):
 
    ```
-   http://localhost:8000/api/kite/callback
+   http://localhost:8000/api/dhan/callback
    ```
 
-   ⚠️ This must be the backend host/port + `/api/kite/callback`, and match
+   ⚠️ This must be the backend host/port + `/api/dhan/callback`, and match
    **exactly** (scheme, host, port, path). If you run the backend on a different
    port, use that port. For a public deployment use your HTTPS backend origin,
-   e.g. `https://api.yourhost.com/api/kite/callback`.
-3. In the app, open **Equity Portfolio Analysis**, paste your **API key** and
-   **API secret**, then click **Connect Kite**. Log in on Kite's page; you'll be
-   redirected back and your holdings will load.
+   e.g. `https://api.yourhost.com/api/dhan/callback`.
+2. In the app, open **Equity Portfolio Analysis**, paste your **Dhan Client
+   ID**, **API key**, and **API secret**, then click **Connect Dhan**. Log in on
+   Dhan's consent page; you'll be redirected back and your holdings will load.
 
-Kite access tokens are issued per day, so you re-connect once each trading day.
+Dhan access tokens are valid for 24 hours, so you re-connect once each trading
+day. Holdings valuation also uses Dhan's market-quote feed, which requires a
+DhanHQ Data APIs subscription on the account.
 
 ---
 
@@ -239,7 +242,7 @@ Reflect & Remember → 5 agent memories updated with actual P&L outcome
 | **AI Backtest** | Yes | ~Rs.15 per date (~$0.18/date) | Runs deep analysis on historical dates |
 | **Reflect & Remember** | Yes | ~Rs.5-10 per trade | Agent learns from your P&L outcome |
 
-Costs shown assume the default Anthropic Claude setup (Haiku for fast tasks + Sonnet for decisions). Switching to cheaper providers like Gemini Flash or GPT-4o-mini can reduce costs by 3-5x. See [Cost Optimization](#cost-optimization) below.
+Costs shown were measured with the earlier Anthropic Claude setup (Haiku for fast tasks + Sonnet for decisions). The default provider is now Qwen Cloud (qwen3.5-flash for fast tasks + qwen3.6-plus for decisions) — scale these estimates to your provider's pricing. See [Cost Optimization](#cost-optimization) below.
 
 ### Unified Recommendation Engine (FREE)
 
@@ -606,12 +609,12 @@ The trade table shows every shadow with its regime tag and per-horizon P&L. Rows
 - Zustand (state management)
 
 **LLM Providers Supported:**
-- Anthropic Claude (default — Haiku + Sonnet mix for cost efficiency)
+- Qwen Cloud (default — qwen3.5-flash + qwen3.6-plus mix for cost efficiency)
+- Anthropic Claude
 - OpenAI GPT
 - Google Gemini
 - xAI Grok
 - DeepSeek
-- Qwen
 
 ---
 
@@ -679,19 +682,19 @@ Switch providers (OpenAI GPT-5.4-mini, Gemini Flash) for even cheaper analyses (
 - [x] Multi-LLM provider support
 - [x] Cost tracking per analysis
 - [x] **Browser authentication** (single-user session + CSRF; optional local, required/fail-closed public)
-- [x] **Zerodha Kite read-only portfolio sync** (OAuth, daily session, holdings)
+- [x] **Dhan read-only portfolio sync** (three-step consent login, 24-hour session, holdings + quote valuation)
 - [x] **Equity portfolio analysis** (P&L, actions, sector allocation, concentration, persisted history)
-- [x] **Local positions tracking** (manual CRUD + manual-preserving Kite sync)
+- [x] **Local positions tracking** (manual CRUD + manual-preserving Dhan sync)
 - [x] **Telegram alerts** for portfolio reviews
 - [x] **Dark mode** (light / dark / system theme)
 - [x] **Ollama** local LLM provider (no API key / cost)
 - [x] **Yahoo-powered ticker search** (live; replaces the bundled NSE list)
-- [x] **Automated test suite** (46 tests: auth, portfolio, positions, Telegram)
+- [x] **Automated test suite** (76 tests: auth, portfolio, positions, Telegram)
 
-### Pre-Kite Hardening
+### Pre-Broker Hardening
 - [x] Sector concentration checker
 - [x] Daily Verdict synthesizer
-- [x] Phase 4a: Zerodha Kite read-only sync (live portfolio/holdings) — margin visibility still pending
+- [x] Phase 4a: Dhan read-only sync (live portfolio/holdings) — margin visibility still pending
 - [ ] Phase 4b: One-click order placement with bracket SL/target
 
 ### Future
@@ -712,7 +715,7 @@ Contributions welcome! Areas that need work:
 
 - Indian market-specific data sources (NSE scraping for bulk/block deals, delivery %, promoter activity)
 - Options/F&O analyzer (Phase 3)
-- Kite margin visibility and order placement (Phase 4b, see #6)
+- Dhan margin visibility and order placement (Phase 4b, see #6)
 - More RSS sources, better news deduplication
 - Additional strategies (VWAP, ORB intraday, momentum breakouts)
 - More test coverage

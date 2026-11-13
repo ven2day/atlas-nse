@@ -2,7 +2,6 @@ import os
 import subprocess
 import sys
 import unittest
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 
@@ -133,11 +132,11 @@ class AuthenticationTests(IsolatedStateTestCase, unittest.TestCase):
         with fresh_test_client() as client:
             login(client)
             read_response = client.get("/api/settings/api-keys")
-            missing_csrf = client.post("/api/kite/logout")
+            missing_csrf = client.post("/api/dhan/logout")
             invalid_csrf = client.post(
-                "/api/kite/logout", headers={"X-CSRF-Token": "not-the-cookie"}
+                "/api/dhan/logout", headers={"X-CSRF-Token": "not-the-cookie"}
             )
-            valid_csrf = client.post("/api/kite/logout", headers=csrf_headers(client))
+            valid_csrf = client.post("/api/dhan/logout", headers=csrf_headers(client))
 
         self.assertNotIn(read_response.status_code, (401, 403), read_response.text)
         self.assertIn(missing_csrf.status_code, (401, 403))
@@ -280,6 +279,17 @@ with TestClient(app) as client:
         self.assertEqual(response.status_code, 401, response.text)
 
 
+class _FakeResponse:
+    def __init__(self, status_code: int, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("no JSON body")
+        return self._payload
+
+
 class OAuthRedirectTests(IsolatedStateTestCase, unittest.TestCase):
     def _location(self, response):
         self.assertIn(response.status_code, (302, 303, 307, 308), response.text)
@@ -287,61 +297,43 @@ class OAuthRedirectTests(IsolatedStateTestCase, unittest.TestCase):
         self.assertIsNotNone(location)
         return location
 
-    def _oauth_state(self, client):
-        with patch(
-            "backend.routers.kite.get_login_url",
-            return_value="https://kite.example/connect/login?api_key=test-key",
-        ):
-            response = client.get("/api/kite/login-url")
-        self.assertEqual(response.status_code, 200, response.text)
-        login_url = response.json()["login_url"]
-        # Kite ignores a bare `state` param; it only echoes values passed via
-        # `redirect_params`, which it URL-decodes into top-level query params on
-        # the redirect. Model that real round-trip: pull the state back out of
-        # redirect_params so it can be replayed as the callback's `state`.
-        redirect_params = parse_qs(urlsplit(login_url).query).get("redirect_params", [""])[0]
-        state = parse_qs(redirect_params).get("state", [None])[0]
-        self.assertTrue(state)
-        return state
-
-    def test_login_url_delivers_state_via_redirect_params_not_bare_param(self):
-        # Regression for the Kite callback failure (issue #7): Kite Connect drops
-        # an arbitrary top-level `state` and only echoes back values nested in
-        # `redirect_params`. A bare `state` never round-trips, so every real
-        # callback failed with invalid_oauth_state.
+    def test_login_url_returns_dhan_consent_login_url(self):
         with fresh_test_client() as client:
             login(client)
             with patch(
-                "backend.routers.kite.get_login_url",
-                return_value="https://kite.example/connect/login?api_key=test-key",
+                "backend.routers.dhan.get_login_url",
+                return_value="https://auth.dhan.co/login/consentApp-login?consentAppId=consent-123",
             ):
-                response = client.get("/api/kite/login-url")
+                response = client.get("/api/dhan/login-url")
             self.assertEqual(response.status_code, 200, response.text)
-            query = parse_qs(urlsplit(response.json()["login_url"]).query)
+            url = response.json()["login_url"]
 
-        self.assertNotIn("state", query, "state must not ride as a top-level param Kite drops")
-        self.assertIn("redirect_params", query, "state must ride in redirect_params Kite echoes")
-        self.assertTrue(parse_qs(query["redirect_params"][0]).get("state", [None])[0])
+        parsed = urlsplit(url)
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "auth.dhan.co")
+        self.assertEqual(parsed.path, "/login/consentApp-login")
+        self.assertEqual(parse_qs(parsed.query).get("consentAppId", [None])[0], "consent-123")
 
-    def test_get_login_url_embeds_state_in_redirect_params(self):
-        # Covers the production brokers-layer path (unpatched get_login_url).
-        from backend.brokers import kite as kite_module
-
-        class _StubClient:
-            def login_url(self):
-                return "https://kite.zerodha.com/connect/login?v=3&api_key=test-key"
+    def test_get_login_url_builds_consent_url_from_the_brokers_layer(self):
+        # Covers the production brokers-layer path (unpatched get_login_url):
+        # the consent session is generated server-side with our app
+        # credentials and the browser URL carries only the consentAppId.
+        from backend.brokers import dhan as dhan_module
 
         with fresh_test_client():
-            with (
-                patch.object(kite_module, "_api_secret", return_value="secret"),
-                patch.object(kite_module, "_new_client", return_value=_StubClient()),
-            ):
-                url = kite_module.get_login_url()
+            self.db.set_setting("dhan_client_id", "1100123456")
+            self.db.set_setting("dhan_api_key", "app-key")
+            self.db.set_setting("dhan_api_secret", "app-secret")
+            with patch(
+                "backend.brokers.dhan.requests",
+                **{"request.return_value": _FakeResponse(200, {"status": "success", "consentAppId": "consent-456"})},
+            ) as requests_mock:
+                url = dhan_module.get_login_url()
 
-        query = parse_qs(urlsplit(url).query)
-        self.assertNotIn("state", query)
-        self.assertIn("redirect_params", query)
-        self.assertTrue(parse_qs(query["redirect_params"][0]).get("state", [None])[0])
+        self.assertEqual(url, "https://auth.dhan.co/login/consentApp-login?consentAppId=consent-456")
+        method, called_url = requests_mock.request.call_args.args
+        self.assertEqual(method, "POST")
+        self.assertEqual(called_url, "https://auth.dhan.co/app/generate-consent")
 
     def test_callback_uses_configured_https_frontend_url_not_host_header(self):
         configured = "https://portfolio.example/equity-portfolio-analysis"
@@ -350,13 +342,12 @@ class OAuthRedirectTests(IsolatedStateTestCase, unittest.TestCase):
             patch.dict(os.environ, {"FRONTEND_URL": configured}),
         ):
             login(client)
-            state = self._oauth_state(client)
             with patch(
-                "backend.routers.kite.exchange_request_token",
+                "backend.routers.dhan.exchange_token_id",
                 return_value={"connected_today": True},
             ) as exchange:
                 response = client.get(
-                    f"/api/kite/callback?request_token=request-123&state={state}",
+                    "/api/dhan/callback?tokenId=token-123",
                     headers={"host": "attacker.example"},
                     follow_redirects=False,
                 )
@@ -367,19 +358,22 @@ class OAuthRedirectTests(IsolatedStateTestCase, unittest.TestCase):
         self.assertEqual(parsed.netloc, "portfolio.example")
         self.assertTrue(parsed.path.endswith("/equity-portfolio-analysis"))
         self.assertNotIn("attacker.example", location)
-        self.assertEqual(parse_qs(parsed.query)["kite"], ["connected"])
-        exchange.assert_called_once_with("request-123")
+        self.assertEqual(parse_qs(parsed.query)["dhan"], ["connected"])
+        exchange.assert_called_once_with("token-123")
 
     def test_callback_defaults_to_localhost_and_does_not_trust_host(self):
         with fresh_test_client() as client:
             os.environ.pop("FRONTEND_URL", None)
             login(client)
-            state = self._oauth_state(client)
-            response = client.get(
-                f"/api/kite/callback?request_token=request-123&state={state}",
-                headers={"host": "attacker.example"},
-                follow_redirects=False,
-            )
+            with patch(
+                "backend.routers.dhan.exchange_token_id",
+                return_value={"connected_today": True},
+            ):
+                response = client.get(
+                    "/api/dhan/callback?tokenId=token-123",
+                    headers={"host": "attacker.example"},
+                    follow_redirects=False,
+                )
 
         location = self._location(response)
         parsed = urlsplit(location)
@@ -387,86 +381,79 @@ class OAuthRedirectTests(IsolatedStateTestCase, unittest.TestCase):
         self.assertEqual(parsed.netloc, "localhost:3000")
         self.assertNotIn("attacker.example", location)
 
-    def test_callback_rejects_missing_or_invalid_state_without_exchanging_token(self):
+    def test_callback_rejects_missing_token_id_or_error_status_without_exchanging_token(self):
         with fresh_test_client() as client:
             login(client)
             with patch(
-                "backend.routers.kite.exchange_request_token",
+                "backend.routers.dhan.exchange_token_id",
                 return_value={"connected_today": True},
             ) as exchange:
-                missing = client.get(
-                    "/api/kite/callback?request_token=request-123",
-                    follow_redirects=False,
-                )
-                invalid = client.get(
-                    "/api/kite/callback?request_token=request-123&state=forged",
+                missing = client.get("/api/dhan/callback", follow_redirects=False)
+                error_status = client.get(
+                    "/api/dhan/callback",
+                    params={"status": "denied"},
                     follow_redirects=False,
                 )
 
-        for response in (missing, invalid):
+        for response in (missing, error_status):
             location = self._location(response)
-            self.assertEqual(parse_qs(urlsplit(location).query)["kite"], ["error"])
+            self.assertEqual(parse_qs(urlsplit(location).query)["dhan"], ["error"])
         exchange.assert_not_called()
 
-    def test_oauth_state_is_single_use_and_replay_is_rejected(self):
-        with fresh_test_client() as client:
-            login(client)
-            state = self._oauth_state(client)
-
-            with patch(
-                "backend.routers.kite.exchange_request_token",
-                return_value={"connected_today": True},
-            ) as exchange:
-                first = client.get(
-                    f"/api/kite/callback?request_token=request-123&state={state}",
-                    follow_redirects=False,
-                )
-                replay = client.get(
-                    f"/api/kite/callback?request_token=request-456&state={state}",
-                    follow_redirects=False,
-                )
-
-        self.assertEqual(parse_qs(urlsplit(self._location(first)).query)["kite"], ["connected"])
-        replay_query = parse_qs(urlsplit(self._location(replay)).query)
-        self.assertEqual(replay_query["kite"], ["error"])
-        exchange.assert_called_once_with("request-123")
-
-    def test_invalid_oauth_state_does_not_consume_pending_state(self):
-        from backend.brokers.kite import consume_oauth_state, create_oauth_state
+    def test_callback_rejects_a_token_for_a_foreign_dhan_client(self):
+        # Dhan's redirect carries only a tokenId — there is no OAuth state
+        # echo — so a login forged for another Dhan account is rejected by
+        # binding the consumed session to the configured client ID.
+        from backend.brokers.dhan import DhanConfigError, exchange_token_id, get_dhan_status
 
         with fresh_test_client():
-            state = create_oauth_state()
-            self.assertFalse(consume_oauth_state("forged-state"))
-            self.assertTrue(consume_oauth_state(state))
+            self.db.set_setting("dhan_client_id", "1100123456")
+            self.db.set_setting("dhan_api_key", "app-key")
+            self.db.set_setting("dhan_api_secret", "app-secret")
+            foreign_session = _FakeResponse(200, {
+                "dhanClientId": "9999999999",
+                "dhanClientName": "ATTACKER",
+                "accessToken": "attacker-token",
+            })
+            with patch("backend.brokers.dhan.requests", **{"request.return_value": foreign_session}):
+                with self.assertRaises(DhanConfigError):
+                    exchange_token_id("token-123")
 
-    def test_oauth_state_can_only_be_consumed_once_concurrently(self):
-        from backend.brokers.kite import consume_oauth_state, create_oauth_state
+        status = get_dhan_status()
+        self.assertFalse(status["connected_today"])
+        self.assertIsNone(self.db.get_setting("dhan_access_token"))
+
+    def test_exchange_stores_today_token_and_profile(self):
+        from backend.brokers.dhan import exchange_token_id, get_dhan_status
 
         with fresh_test_client():
-            state = create_oauth_state()
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                results = list(executor.map(consume_oauth_state, (state, state)))
+            self.db.set_setting("dhan_client_id", "1100123456")
+            self.db.set_setting("dhan_api_key", "app-key")
+            self.db.set_setting("dhan_api_secret", "app-secret")
+            consent_session = _FakeResponse(200, {
+                "dhanClientId": "1100123456",
+                "dhanClientName": "TEST USER",
+                "dhanClientUcc": "TESTUCC",
+                "givenPowerOfAttorney": True,
+                "accessToken": "day-token",
+                "expiryTime": "2026-11-13T18:30:00",
+            })
+            with patch("backend.brokers.dhan.requests", **{"request.return_value": consent_session}):
+                status = exchange_token_id("token-123")
 
-        self.assertEqual(sorted(results), [False, True])
-
-    def test_multiple_pending_oauth_starts_remain_valid(self):
-        from backend.brokers.kite import consume_oauth_state, create_oauth_state
-
-        with fresh_test_client():
-            first = create_oauth_state()
-            second = create_oauth_state()
-            self.assertTrue(consume_oauth_state(first))
-            self.assertTrue(consume_oauth_state(second))
+        self.assertTrue(status["connected_today"])
+        self.assertEqual(self.db.get_setting("dhan_access_token"), "day-token")
+        self.assertEqual(status["profile"]["client_id"], "1100123456")
+        self.assertEqual(status["profile"]["client_name"], "TEST USER")
 
     def test_callback_error_query_is_encoded_and_cannot_inject_headers_or_markup(self):
         attack = "<script>alert(1)</script>\r\nLocation: https://attacker.example"
         with fresh_test_client() as client:
             os.environ.pop("FRONTEND_URL", None)
             login(client)
-            state = self._oauth_state(client)
             response = client.get(
-                "/api/kite/callback",
-                params={"status": attack, "state": state},
+                "/api/dhan/callback",
+                params={"status": attack},
                 headers={"host": "attacker.example"},
                 follow_redirects=False,
             )

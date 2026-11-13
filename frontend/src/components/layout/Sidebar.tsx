@@ -55,7 +55,7 @@ const navGroups: NavGroup[] = [
     title: "ANALYZE",
     items: [
       { href: "/analysis", label: "Deep Analysis", icon: Search, hint: "AI-powered (paid)" },
-      { href: "/equity-portfolio-analysis", label: "Equity portfolio analysis", icon: PieChart, hint: "Kite holdings review" },
+      { href: "/equity-portfolio-analysis", label: "Equity portfolio analysis", icon: PieChart, hint: "Dhan holdings review" },
       { href: "/charts", label: "Charts", icon: CandlestickChart, hint: "Candlestick charts" },
     ],
   },
